@@ -289,6 +289,11 @@ class Orchestrator:
             self.responder.cancel()
             recovered = self._recover_leading_words()
             follow_up = text or recovered
+            if not self.responder.busy and self.state in (State.THINKING,
+                                                          State.SPEAKING):
+                # Nothing in flight to report a result, so nothing else will
+                # take us back to idle.
+                self.reset()
         finally:
             self._interrupting = False
         if follow_up:

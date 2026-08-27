@@ -195,3 +195,15 @@ def test_speak_false_still_produces_text():
     result = responder.submit(AnswerRequest(query="hello", speak=False))
     assert tts.spoken == []
     assert result.text.startswith("First sentence.")
+
+
+def test_waiting_for_the_responder_means_the_callback_has_run():
+    """A late on_done landing after the caller moved on is how a truncation
+    record ends up attached to the wrong turn."""
+    seen = []
+    responder = SpeechResponder(StreamingLlm(), RecordingTts(), threaded=True,
+                                on_done=seen.append)
+    responder.submit(AnswerRequest(query="hello"))
+    assert responder.wait(5)
+    assert len(seen) == 1
+    assert responder.busy is False

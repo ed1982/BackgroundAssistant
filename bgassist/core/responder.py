@@ -161,12 +161,16 @@ class SpeechResponder:
 
         self.last_result = result
         self._busy.clear()
-        self._finished.set()
         if self.on_done is not None:
             try:
                 self.on_done(result)
             except Exception:  # noqa: BLE001
                 log.exception("on_done callback failed")
+        # Signalled last, so that waiting for the responder means the whole
+        # turn is finished — including the truncation record being written.
+        # Setting it first let a late callback land after the caller had moved
+        # on, which is the kind of race that only shows up under load.
+        self._finished.set()
         return result
 
     def _tokens(self, request: AnswerRequest, sink: List[str]):
