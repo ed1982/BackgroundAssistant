@@ -1,4 +1,4 @@
-from starcop.transcript import TranscriptBuffer
+from bgassist.core.transcript import TranscriptBuffer
 
 
 def test_add_and_render():

@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from starcop.tts import MockTts, Pyttsx3Tts, SayTts, TtsError, make_tts
+from bgassist.tts import MockTts, Pyttsx3Tts, SayTts, TtsError, make_tts
 
 
 def test_say_command(monkeypatch):
@@ -78,12 +78,12 @@ def test_make_tts_selection(monkeypatch):
         def __init__(self, rate=185, voice=None):
             created["made"] = True
 
-    monkeypatch.setattr("starcop.tts.Pyttsx3Tts", FakePyttsx3)
-    monkeypatch.setattr("starcop.tts.sys.platform", "win32")
+    monkeypatch.setattr("bgassist.tts.Pyttsx3Tts", FakePyttsx3)
+    monkeypatch.setattr("bgassist.tts.sys.platform", "win32")
     make_tts(SimpleNamespace(engine="auto", rate=1, voice=None))
     assert created.get("made")
 
-    monkeypatch.setattr("starcop.tts.sys.platform", "darwin")
+    monkeypatch.setattr("bgassist.tts.sys.platform", "darwin")
     assert isinstance(make_tts(SimpleNamespace(engine="auto", rate=1, voice=None)),
                       SayTts)
     assert isinstance(make_tts(SimpleNamespace(engine="mock", rate=1, voice=None)),

@@ -1,4 +1,4 @@
-from starcop.segmenter import UtteranceSegmenter
+from bgassist.core.segmenter import UtteranceSegmenter
 
 from tests.fakes import FakeVad
 

@@ -40,10 +40,10 @@ def speech_wav(tmp_path_factory):
 
 
 def test_full_audio_chain(speech_wav):
-    from starcop.segmenter import UtteranceSegmenter
-    from starcop.transcriber import WhisperTranscriber
-    from starcop.vad import WebrtcVad, frame_bytes
-    from starcop.wakeword import WakeWordMatcher
+    from bgassist.core.segmenter import UtteranceSegmenter
+    from bgassist.stt.whisper import WhisperTranscriber
+    from bgassist.audio.vad import WebrtcVad, frame_bytes
+    from bgassist.core.trigger import TriggerParser
 
     vad = WebrtcVad(aggressiveness=2, samplerate=16000)
     segmenter = UtteranceSegmenter(
@@ -51,7 +51,7 @@ def test_full_audio_chain(speech_wav):
         min_utterance_ms=300, max_utterance_ms=30000)
     transcriber = WhisperTranscriber(model_size="base.en", compute_type="int8",
                                      language="en")
-    matcher = WakeWordMatcher(["computer"])
+    matcher = TriggerParser(["computer"])
 
     with wave.open(str(speech_wav), "rb") as wf:
         pcm = wf.readframes(wf.getnframes())

@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "backgroundassistant"
+version = "0.2.0"
+description = "An always-on, local-first voice assistant that listens for a trigger word and answers out loud."
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+license = { text = "MIT" }
+authors = [{ name = "Ed Martin" }]
+
+# Runtime dependencies. Heavy ones are imported lazily so the unit test
+# suite runs without any of them installed.
+dependencies = [
+    "faster-whisper>=1.0.3",      # local speech-to-text (CTranslate2)
+    "sounddevice>=0.4.6",         # microphone capture (PortAudio, bundled in wheels)
+    "webrtcvad-wheels>=2.0.14",   # voice activity detection / endpointing
+    "PySide6>=6.6",               # tray, chat window, preferences (QtWebEngine)
+    "keyring>=24.0",              # macOS Keychain / Windows Credential Manager
+    "cryptography>=42.0",         # AES-256-GCM for the conversation store
+    "platformdirs>=4.0",          # per-OS settings/log/data directories
+    "numpy>=1.24",                # PCM conversion for whisper
+]
+
+[project.optional-dependencies]
+# Local neural text-to-speech (D11). Optional: the system voice is the fallback.
+piper = ["piper-tts>=1.2"]
+# Always-on acoustic wake-word spotter (S2). Optional: transcript-based
+# triggering works without it, barge-in is just ~1 s later.
+spotter = ["openwakeword>=0.6"]
+# Windows SAPI5 voices.
+windows = ["pyttsx3>=2.90"]
+# macOS integration: login item (SMAppService) and Apple speech recognition.
+macos = ["pyobjc-framework-ServiceManagement>=10.0", "pyobjc-framework-Speech>=10.0"]
+dev = ["pytest>=8.0", "pytest-timeout>=2.2", "ruff>=0.5"]
+
+[project.scripts]
+backgroundassistant = "bgassist.cli:main"
+
+[tool.setuptools]
+packages = [
+    "bgassist",
+    "bgassist.core",
+    "bgassist.audio",
+    "bgassist.stt",
+    "bgassist.llm",
+    "bgassist.tts",
+    "bgassist.settings",
+    "bgassist.storage",
+    "bgassist.ui",
+    "bgassist.platform",
+]
+
+[tool.setuptools.package-data]
+"bgassist.ui" = ["web/*.html", "web/*.css", "web/*.js", "web/vendor/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: end-to-end tests that need heavy deps (whisper model download)",
+]
+
+[tool.ruff]
+line-length = 95
+target-version = "py310"

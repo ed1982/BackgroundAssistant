@@ -5,8 +5,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from starcop.llm import (LLMError, MockBackend, OllamaBackend,
-                         OpenAICompatibleBackend, build_messages, make_llm)
+from bgassist.llm import (LLMError, MockBackend, OllamaBackend,
+                          OpenAICompatibleBackend, build_messages, make_llm)
 
 
 def test_build_messages_with_query():
