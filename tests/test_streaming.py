@@ -11,7 +11,6 @@ from bgassist.llm.openai import OpenAICompatibleBackend
 from bgassist.tts.chunker import sentence_chunks, split_sentences
 from tests.fakes import RecordingLlm, RecordingTts, StreamingLlm
 
-
 # -- chunking -------------------------------------------------------------
 
 def test_sentences_are_emitted_as_they_complete():
@@ -131,7 +130,6 @@ def test_cancel_mid_sentence_does_not_credit_that_sentence_as_heard():
 
 def test_cancel_after_a_sentence_keeps_that_sentence_as_the_prefix():
     """The other half of the same rule: sentences that finished were heard."""
-    import time
 
     class TwoStepTts(RecordingTts):
         def __init__(self):

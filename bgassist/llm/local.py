@@ -13,7 +13,7 @@ import threading
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
-from typing import Dict, Iterator, List, Optional
+from typing import Iterator, List, Optional
 
 from bgassist.llm.base import HttpBackend, LLMError
 from bgassist.llm.prompts import build_messages

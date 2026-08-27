@@ -212,6 +212,6 @@ class TriggerParser:
         stripped = raw_after.lstrip(" \t")
         if stripped and stripped[0] in _CLAUSE_PUNCTUATION:
             return True
-        if not before or not after:
-            return True
-        return False
+        # A trigger at either edge of the utterance is an address, not a
+        # passing mention.
+        return not before or not after

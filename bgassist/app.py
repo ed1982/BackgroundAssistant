@@ -242,12 +242,14 @@ class Application:
         self.buffer.max_seconds = max(30.0, settings.ai.context_seconds)
         if self.notifier is not None:
             self.notifier.enabled = settings.general.notifications
-        if any(k.startswith("listening.") for k in keys) or "*" in keys:
-            if self.listening:
-                self.stop_listening()
-                self.transcriber = self._build_transcriber()
-                self.orchestrator.transcriber = self.transcriber
-                self.start_listening()
+        listening_changed = any(k.startswith("listening.") for k in keys) or "*" in keys
+        if listening_changed and self.listening:
+            # Capture, VAD and the model all come from these values, so the
+            # only honest way to apply them live is to restart the engine.
+            self.stop_listening()
+            self.transcriber = self._build_transcriber()
+            self.orchestrator.transcriber = self.transcriber
+            self.start_listening()
         if "general.launch_at_login" in keys:
             from bgassist.platform import login_item
 

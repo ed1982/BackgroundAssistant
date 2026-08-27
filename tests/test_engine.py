@@ -2,8 +2,6 @@
 import threading
 import time
 
-import pytest
-
 from bgassist.audio.ring import AudioRing, BoundedFrameQueue
 from bgassist.audio.spotter import ScriptedSpotter
 from bgassist.core.orchestrator import State

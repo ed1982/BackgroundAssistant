@@ -6,7 +6,6 @@ noise. When it is on, clicking the notification opens the chat window.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from bgassist import APP_NAME
 

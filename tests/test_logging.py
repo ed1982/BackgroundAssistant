@@ -6,13 +6,15 @@ accumulated in the project folder. This is the test that keeps that from
 coming back.
 """
 import logging
-import time
 
 import pytest
 
-from bgassist.logging_setup import (RedactingFilter, TRANSCRIPT_LOGGER,
-                                    redacting_filter, setup_logging,
-                                    transcript_log)
+from bgassist.logging_setup import (
+    RedactingFilter,
+    redacting_filter,
+    setup_logging,
+    transcript_log,
+)
 from tests.fakes import FakeClock, RecordingLlm, RecordingTts, make_orchestrator
 
 PRIVATE = "the biopsy result was benign and the argument was about money"

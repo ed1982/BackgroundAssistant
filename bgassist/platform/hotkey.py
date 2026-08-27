@@ -7,7 +7,7 @@ dormant and only does anything once a shortcut is set in Preferences.
 from __future__ import annotations
 
 import logging
-from typing import Callable, Optional
+from typing import Callable
 
 log = logging.getLogger("bgassist.platform.hotkey")
 

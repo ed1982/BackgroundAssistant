@@ -8,7 +8,6 @@ from __future__ import annotations
 import logging
 import queue
 import subprocess
-import sys
 import threading
 from typing import List, Optional
 

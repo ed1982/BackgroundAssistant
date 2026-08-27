@@ -10,12 +10,10 @@ from typing import Optional
 
 from bgassist.llm.anthropic import AnthropicBackend
 from bgassist.llm.base import HttpBackend, LLMBackend, LLMCancelled, LLMError
-from bgassist.llm.local import (KNOWN_PORTS, LocalServer, OllamaBackend,
-                                detect_local_servers)
+from bgassist.llm.local import KNOWN_PORTS, LocalServer, OllamaBackend, detect_local_servers
 from bgassist.llm.mock import MockBackend
 from bgassist.llm.openai import OpenAICompatibleBackend
-from bgassist.llm.prompts import (DEFAULT_SYSTEM_PROMPT, build_messages,
-                                  history_from_messages)
+from bgassist.llm.prompts import DEFAULT_SYSTEM_PROMPT, build_messages, history_from_messages
 
 log = logging.getLogger("bgassist.llm")
 

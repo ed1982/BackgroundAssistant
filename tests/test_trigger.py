@@ -1,8 +1,13 @@
 """Trigger grammar: an exhaustive table over phrasing x sensitivity (§11)."""
 import pytest
 
-from bgassist.core.trigger import (TRIGGER_MARKER, Sensitivity, TriggerParser,
-                                   TriggerPosition, normalize_text)
+from bgassist.core.trigger import (
+    TRIGGER_MARKER,
+    Sensitivity,
+    TriggerParser,
+    TriggerPosition,
+    normalize_text,
+)
 
 
 def parser(sensitivity=Sensitivity.BALANCED, words=("computer",)):

@@ -42,7 +42,7 @@ class AnthropicBackend(HttpBackend):
         return {
             "model": self.model,
             "system": system,
-            "messages": [m for m in messages[1:]],
+            "messages": list(messages[1:]),
             "max_tokens": self.max_tokens or 400,
             "temperature": self.temperature,
             "stream": stream,

@@ -45,5 +45,5 @@ def subtract_playback(heard: str, spoken: str, min_run: int = MIN_RUN) -> str:
             for j in range(i, i + min_run):
                 drop[j] = True
     # Extend each dropped run word by word while the words keep matching.
-    kept = [w for w, d in zip(heard_words, drop) if not d]
+    kept = [w for w, d in zip(heard_words, drop, strict=False) if not d]
     return re.sub(r"\s+", " ", " ".join(kept)).strip()

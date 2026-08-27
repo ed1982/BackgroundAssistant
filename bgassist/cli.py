@@ -124,7 +124,7 @@ def run_selftest(wav_path: Optional[str], expect: Optional[str] = None,
     print("\n--- trigger ---")
     if not classifications:
         print("no trigger word detected")
-    for text, position, verdict, marked in classifications:
+    for _text, position, verdict, marked in classifications:
         print(f"{position:8} {verdict:8} {marked}")
 
     llm = application.llm
@@ -163,8 +163,8 @@ def run_check() -> int:
 
     from bgassist.app import Application
     from bgassist.llm.mock import MockBackend
-    from bgassist.stt.mock import MockTranscriber
     from bgassist.storage import ConversationStore, NullCipher
+    from bgassist.stt.mock import MockTranscriber
     from bgassist.tts.mock import MockTts
     from bgassist.ui.bridge import BridgeCore
 

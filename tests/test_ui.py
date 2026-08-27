@@ -3,7 +3,6 @@ without a browser: every control must be bound to a setting that exists, and
 every backend call the pages make must exist on the bridge."""
 import json
 import re
-from pathlib import Path
 
 import pytest
 
@@ -72,7 +71,6 @@ def test_test_connection_reports_success(bridge):
 
 
 def test_test_connection_reports_the_real_error(application):
-    from bgassist.llm.openai import OpenAICompatibleBackend
 
     application._llm_override = None
     application.settings_store.update({"ai.provider": "custom",

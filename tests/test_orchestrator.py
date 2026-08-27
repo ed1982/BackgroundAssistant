@@ -1,7 +1,5 @@
 from bgassist.core.orchestrator import State
-
-from tests.fakes import (FakeClock, FailingLlm, RecordingLlm, RecordingTts,
-                         make_orchestrator)
+from tests.fakes import FailingLlm, FakeClock, RecordingLlm, RecordingTts, make_orchestrator
 
 
 def test_idle_no_trigger_never_calls_llm():
@@ -185,7 +183,6 @@ def test_push_to_talk_speech_still_reaches_the_ambient_buffer():
 def test_a_transient_transcription_failure_is_reported_and_listening_continues():
     from bgassist.core import events
     from bgassist.stt.base import TranscriptionFailed
-
     from tests.fakes import RaisingTranscriber
 
     bus = events.RecordingBus()
@@ -200,7 +197,6 @@ def test_a_transient_transcription_failure_is_reported_and_listening_continues()
 def test_a_missing_model_is_reported_as_something_to_act_on():
     from bgassist.core import events
     from bgassist.stt.base import ModelUnavailable
-
     from tests.fakes import RaisingTranscriber
 
     bus = events.RecordingBus()

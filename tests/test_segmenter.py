@@ -1,5 +1,4 @@
 from bgassist.core.segmenter import UtteranceSegmenter
-
 from tests.fakes import FakeVad
 
 # One 30 ms frame of 16 kHz int16 mono = 960 bytes.
@@ -7,8 +6,8 @@ FRAME = b"\x01\x02" * 480
 
 
 def make_seg(vad, **kw):
-    defaults = dict(frame_ms=30, pre_roll_ms=60, end_silence_ms=90,
-                    min_utterance_ms=60, max_utterance_ms=300)
+    defaults = {"frame_ms": 30, "pre_roll_ms": 60, "end_silence_ms": 90,
+                "min_utterance_ms": 60, "max_utterance_ms": 300}
     defaults.update(kw)
     return UtteranceSegmenter(vad, **defaults)
 

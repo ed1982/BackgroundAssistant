@@ -60,9 +60,10 @@ class RedactingFilter(logging.Filter):
 
     # -- logging.Filter --------------------------------------------------
     def filter(self, record: logging.LogRecord) -> bool:
-        if record.name == TRANSCRIPT_LOGGER or getattr(record, "transcript", False):
-            if not self.transcripts_allowed:
-                return False
+        carries_transcript = (record.name == TRANSCRIPT_LOGGER
+                              or getattr(record, "transcript", False))
+        if carries_transcript and not self.transcripts_allowed:
+            return False
         try:
             message = record.getMessage()
         except Exception:  # noqa: BLE001 - a broken format string must not crash logging

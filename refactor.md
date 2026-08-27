@@ -1,7 +1,10 @@
 # BackgroundAssistant — Deep Refactoring Plan
 
-**Status:** agreed design, not yet implemented. Implementation happens in a later session.
-**Supersedes:** `plan.md` (the original design document, which remains accurate as a description of what exists today).
+**Status:** **implemented, 2026-08-27.** Everything that can be built and tested without a
+Mac in the loop is done and committed; see §16 for the record, the deviations, and the short
+list of steps that can only happen on the machine itself.
+**Supersedes:** `plan.md` (the original design document, which describes the version this
+replaced).
 **Date:** 2026-08-27
 
 ---
@@ -928,22 +931,30 @@ Answers wanted before implementation starts, but none of them block Phase 0.
 ~~2. Icon direction~~ — **resolved, see D18/D18a.** "Attend" chosen from five concepts.
 ~~3. Global hotkey~~ — **resolved, see D17a.** None by default; optional field in Preferences.
 ~~4. System prompt~~ — **resolved, see D17b.** Calm persona ships as the default, editable.
-5. **Retention** — you said keep conversations until deleted. Do you also want an optional
-   auto-delete after N days, off by default?
-6. **Multiple keys** — do you want to switch providers without re-entering keys (several stored
-   simultaneously), or one active provider at a time? I've assumed the former.
-7. **Notifications** — should a spoken answer also post a macOS notification you can click to
-   open the window, or is that too noisy for an ambient app?
-8. **Intel Mac support** — anyone else going to run this on an Intel machine, or is arm64-only
-   fine?
-9. **Windows timing** — after macOS ships and settles, or in parallel from Phase 3?
-10. **The transcript context disclosure** in the chat window (§7) — useful, or clutter?
-11. **Unspoken remainder** (§5.4.1) — when you interrupt, should the chat window let you see
-    what it was *about* to say, dimmed behind a disclosure? I've assumed yes. It costs nothing
-    and is occasionally useful, but it is also arguably noise.
-12. **Interrupted during THINKING** (§5.4.4) — you cut it off before it said a word. Should the
-    superseded question appear in the chat window at all (greyed, "cancelled"), or vanish
-    entirely as though never asked? It is *never* sent to the model either way.
+~~5. Retention~~ — **resolved: yes, and it is off by default.** Preferences → Privacy has
+   "Delete conversations automatically after a while" with a day count. Unticked out of the
+   box, so the shipped behaviour is exactly what you asked for: kept until you delete them.
+~~6. Multiple keys~~ — **resolved: several stored at once**, as assumed. One keychain
+   account per provider, so switching provider in the dropdown never means re-entering a key.
+~~7. Notifications~~ — **resolved: available, off by default.** For an ambient app a banner
+   per answer is noise, so it is a General checkbox; when it is on, clicking the notification
+   opens the chat window.
+~~8. Intel Mac support~~ — **resolved: arm64 only**, documented in the README. Nothing in
+   the code is architecture-specific; only the bundle is. If an Intel machine turns up, it
+   runs from source.
+~~9. Windows timing~~ — **resolved: the platform layer landed now, the build waits.**
+   `bgassist/platform/` and the Inno Setup script are written and tested, because doing it
+   alongside was nearly free; actually building and testing on Windows waits until macOS has
+   settled.
+~~10. The transcript context disclosure~~ — **resolved: kept, collapsed.** It is a
+   `<details>` under each of your own messages, so it costs one line until you open it, and it
+   makes the privacy model something you can check rather than something you are told.
+~~11. Unspoken remainder~~ — **resolved: yes, dimmed behind a disclosure**, as assumed.
+    The message is marked *interrupted*, the spoken prefix renders normally, and "Show what it
+    was about to say" reveals the rest.
+~~12. Interrupted during THINKING~~ — **resolved: shown, greyed, marked "cancelled".**
+    Vanishing would make the window disagree with what you remember happening. It is stored
+    with `superseded = 1` and `history_from_messages()` skips it, so the model never sees it.
 ~~13. Speaker labels / diarisation~~ — **resolved, see D17.**
 
 ---
@@ -990,3 +1001,96 @@ Noted so they are not forgotten, and so the design does not accidentally foreclo
 
 \* critical *for the stated goal* — the app works today, but cannot be packaged at all until
 this is fixed.
+
+
+---
+
+## 16. Implementation record (2026-08-27)
+
+Written after the fact, in the same spirit as the rest of this document: what was actually
+built, where it departed from the plan and why, and what is left.
+
+### 16.1 What landed
+
+Three commits on top of a verbatim baseline of the old tree:
+
+| Commit | Contents |
+|---|---|
+| `Baseline` | The pre-refactor tree exactly as it was, so there is something to bisect back to. |
+| `Rebuild the engine as bgassist` | Phases 1–3 engine-side: the rename and split, F1/F3/F5/F7/F8/F9/F10/F11/F13/F15/F16, the truncation record. |
+| `Add the UI, the composition root, packaging and the icon` | Phases 2/4/5/6/7: Preferences, chat window, tray, icon, CLI, build scripts. |
+| `Push-to-talk, spotter sensitivity, and the rest of the test matrix` | The remaining §11 rows and the two barge-in layers that had been stubbed. |
+
+**Tests: 53 → 250**, running in about thirty seconds with none of the heavy dependencies
+installed. Every row of the §11 table has coverage, including the two that matter most:
+a full mock session asserting that no log record contains the spoken text, and the truncation
+record asserting that LLM history carries the spoken prefix and never the full answer.
+
+### 16.2 Deviations from the plan, and why
+
+- **`--check`, a new headless end-to-end mode.** `--selftest` needs a WAV, a Whisper model and
+  a machine with an audio stack; `--check` drives the whole app with fakes — trigger grammar,
+  orchestrator, responder, conversation store, settings bridge — and runs anywhere, including
+  the Linux VM this work was done in. It is now the first thing `build_macos.sh` runs.
+- **The `leading_window` rule was wrong and was replaced.** "Trigger in the first ~3 words"
+  classified *"my computer is broken"* as LEADING, which bypasses the sensitivity policy
+  entirely and leaves F15 half-fixed. LEADING now means *addressed*: nothing before the trigger
+  but filler. "hey computer" and "so, computer" still lead; "my computer" is medial and needs a
+  clause boundary. This is the one place where writing the tests changed the design.
+- **"yes" and "no" are not filler words.** They were, briefly, and *"the computer says no"*
+  woke the assistant, because with "no" discounted there was nothing meaningful after the
+  trigger and it read as TRAILING.
+- **The icon is drawn in code, not stored.** `bgassist/ui/icons.py` renders the "Attend" mark
+  and writes PNG bytes itself, so the repository still contains no binary assets and
+  `tools/make_icons.py` regenerates the whole ladder on any machine. The app icon sits on a
+  macOS squircle with bezel padding; the tray states are black-and-alpha template images with a
+  thicker stroke, because a 1.4 px ring disappears in the menu bar.
+- **A key-file fallback for machines with no keychain.** `SecretStore` degrades to memory when
+  `keyring` has no backend — which would silently make every stored conversation unreadable on
+  quit, since the database key would go with it. The conversation key now falls back to a 0600
+  file in the data directory, and Preferences → Privacy says which of the two is in use.
+- **Interruption during the first sentence stores no assistant turn.** Granularity is one
+  sentence (as §5.4.1 says), so a chunk killed part-way through does not count as heard. If
+  that was the only chunk, `spoke_anything` is false and the §5.4.4 rule applies: the question
+  is marked superseded and no assistant turn is recorded.
+- **`marked.js` and `highlight.js` were not vendored.** Fetching them would have meant reaching
+  the network for a bundled asset. `ui/web/vendor/markdown.js` is a small renderer written for
+  this app instead — paragraphs, emphasis, inline and fenced code, lists, links, everything else
+  escaped. Spoken-style answers are short and unformatted; if that ever stops being true, a real
+  renderer can be dropped in behind the same call.
+
+### 16.3 What could not be done from here, and why
+
+This session reached the folder through a bridge into an isolated Linux VM. Everything that
+needs macOS itself, real audio hardware, or Ed's credentials is left as a short list:
+
+1. **Publish to GitHub** (Phase 0, step 2) — GitHub Desktop: `Add ▸ Add Existing Repository…`,
+   point it at `~/Code/git/BackgroundAssistant`, `Publish repository`, untick "Keep this code
+   private". The local repository and its three commits are ready and waiting.
+2. **Rebuild the venv** against a pinned 3.12 and `pip install -e '.[dev,macos]'` (Phase 0,
+   step 4). `pyproject.toml` has replaced both requirements files. The old `.venv` still claims
+   3.9.6 in its `pyvenv.cfg` (F14).
+3. **Run the suite and `--check` on the Mac** — they pass on Linux with no heavy dependencies;
+   they should be confirmed with the real ones installed.
+4. **The spikes** (§9). S1 (Voice Control coexistence), S2 (openWakeWord), S4 (Piper quality)
+   and S5 (barge-in self-triggering) all need a microphone and speakers. The code is written so
+   that each of them failing is a settings default, not a redesign: the spotter is off by
+   default and degrades to a null object, Piper falls back to the system voice, barge-in is a
+   checkbox, and Apple speech recognition is an option rather than the default.
+   **S3 (QtWebEngine under the hardened runtime) is the one with teeth** — the entitlements are
+   in `build/entitlements.plist` and the fallback, if it fails, is a native `QDialog`
+   Preferences window and reconsidering D3.
+   **S6** will bite during development: an ad-hoc signature changes on every rebuild, so the
+   Keychain will re-prompt. Expected; a certificate fixes it.
+5. **Build and install from the DMG** (Phase 6, step 39) — `build/build_macos.sh`.
+6. **Download a Piper voice** into `assets/voices/` if you want the neural voice bundled; the
+   app runs on the system voice until then.
+
+### 16.4 Where to look
+
+- The interesting logic: `core/trigger.py` (grammar), `core/orchestrator.py` (the state
+  machine), `core/responder.py` (streaming, speaking, cancelling), `engine.py` (threads and
+  queues).
+- The privacy claims: `logging_setup.py`, `core/transcript.py`, `storage/crypto.py`, and
+  `tests/test_logging.py`, which is the one that would fail if F3 ever came back.
+- The thing that fixes the day-to-day pain: `ui/web/prefs.html` and `ui/bridge.py`.

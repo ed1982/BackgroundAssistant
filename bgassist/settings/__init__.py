@@ -1,7 +1,13 @@
 """Settings, secrets and migration."""
-from bgassist.settings.schema import (AdvancedSettings, AiSettings,
-                                       GeneralSettings, ListeningSettings,
-                                       PrivacySettings, Settings, VoiceSettings)
+from bgassist.settings.schema import (
+                                       AdvancedSettings,
+                                       AiSettings,
+                                       GeneralSettings,
+                                       ListeningSettings,
+                                       PrivacySettings,
+                                       Settings,
+                                       VoiceSettings,
+)
 from bgassist.settings.secrets import SecretStore, display_stub
 from bgassist.settings.store import SettingsStore
 

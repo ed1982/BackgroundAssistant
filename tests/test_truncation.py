@@ -4,17 +4,15 @@ The rule under test throughout: **the model's picture of the exchange must
 match the user's picture of the exchange.** What was spoken is what is stored
 and replayed; what was generated but never heard is not.
 """
-import threading
 import time
 
 import pytest
 
 from bgassist.core.echo import subtract_playback
 from bgassist.core.orchestrator import State
-from bgassist.llm.prompts import INTERRUPTED_SUFFIX, history_from_messages
+from bgassist.llm.prompts import INTERRUPTED_SUFFIX
 from bgassist.storage import ConversationStore, NullCipher
-from tests.fakes import (FakeClock, RecordingTts, StreamingLlm,
-                         make_orchestrator)
+from tests.fakes import RecordingTts, StreamingLlm, make_orchestrator
 
 
 @pytest.fixture()

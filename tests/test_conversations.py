@@ -6,8 +6,7 @@ import pytest
 
 from bgassist.settings.secrets import SecretStore
 from bgassist.storage import ConversationStore, NullCipher
-from bgassist.storage.crypto import (AesGcmCipher, generate_key,
-                                     load_or_create_key, make_cipher)
+from bgassist.storage.crypto import AesGcmCipher, generate_key, load_or_create_key, make_cipher
 
 
 @pytest.fixture()

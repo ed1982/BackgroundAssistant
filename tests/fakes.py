@@ -135,14 +135,14 @@ class RecordingTts:
 
 
 def engine_config(**overrides) -> SimpleNamespace:
-    defaults = dict(
-        command_end_silence_ms=1500,
-        max_command_wait_ms=12000,
-        context_seconds=120.0,
-        barge_in=True,
-        auto_title=False,
-        speak_typed_answers=True,
-    )
+    defaults = {
+        "command_end_silence_ms": 1500,
+        "max_command_wait_ms": 12000,
+        "context_seconds": 120.0,
+        "barge_in": True,
+        "auto_title": False,
+        "speak_typed_answers": True,
+    }
     defaults.update(overrides)
     return SimpleNamespace(**defaults)
 

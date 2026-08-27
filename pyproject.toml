@@ -65,3 +65,19 @@ markers = [
 [tool.ruff]
 line-length = 95
 target-version = "py310"
+
+[tool.ruff.lint]
+# Errors, undefined names, import hygiene and the obvious bug-shaped rules.
+# Deliberately not the pyupgrade set: the codebase supports 3.10 and uses
+# explicit typing.Optional/List throughout, which is a style choice, not a
+# defect.
+select = ["E", "F", "I", "B", "C4", "SIM"]
+ignore = [
+    "E501",    # long lines are caught by review, not by a hard failure
+    "B008",    # function calls in defaults are used deliberately for clocks
+    "SIM105",  # contextlib.suppress is not clearer than a commented except
+    "SIM108",  # ternaries are not always more readable
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]

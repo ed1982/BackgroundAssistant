@@ -40,10 +40,10 @@ def speech_wav(tmp_path_factory):
 
 
 def test_full_audio_chain(speech_wav):
-    from bgassist.core.segmenter import UtteranceSegmenter
-    from bgassist.stt.whisper import WhisperTranscriber
     from bgassist.audio.vad import WebrtcVad, frame_bytes
+    from bgassist.core.segmenter import UtteranceSegmenter
     from bgassist.core.trigger import TriggerParser
+    from bgassist.stt.whisper import WhisperTranscriber
 
     vad = WebrtcVad(aggressiveness=2, samplerate=16000)
     segmenter = UtteranceSegmenter(
