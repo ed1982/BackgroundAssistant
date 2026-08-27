@@ -30,8 +30,10 @@ TRIGGER_MARKER = "«ASSISTANT-NAME-SPOKEN»"
 FILLER_WORDS = frozenset({
     "um", "uh", "erm", "er", "ah", "oh", "hmm", "mm", "please", "thanks",
     "thank", "you", "ok", "okay", "right", "now", "then", "hey", "hi", "hello",
-    "yeah", "yes", "no", "so", "well", "just", "actually",
+    "so", "well", "just", "actually",
 })
+# Deliberately not filler: "yes" and "no" carry meaning ("the computer says
+# no" must stay quiet, and one-word answers matter in a conversation).
 
 _CLAUSE_PUNCTUATION = ",.;:!?—-–"
 
@@ -120,7 +122,7 @@ class TriggerParser:
     """Matches configured trigger words and classifies where they fell."""
 
     def __init__(self, trigger_words, sensitivity=Sensitivity.BALANCED,
-                 leading_window: int = 3):
+                 max_leading_filler: int = 3):
         self._triggers = [t.strip() for t in (trigger_words or []) if t and t.strip()]
         if not self._triggers:
             raise ValueError("at least one non-empty trigger word is required")
@@ -128,7 +130,7 @@ class TriggerParser:
             (t, re.compile(rf"\b{re.escape(t)}\b", re.IGNORECASE)) for t in self._triggers
         ]
         self.sensitivity = Sensitivity.parse(sensitivity)
-        self.leading_window = int(leading_window)
+        self.max_leading_filler = int(max_leading_filler)
 
     # -- introspection ---------------------------------------------------
     @property
@@ -180,15 +182,23 @@ class TriggerParser:
 
     # -- internals -------------------------------------------------------
     def _classify(self, before: str, after: str) -> TriggerPosition:
-        before_words = _meaningful(_words(before))
+        raw_before = _words(before)
+        before_words = _meaningful(raw_before)
         after_words = _meaningful(_words(after))
+
         # "Nothing meaningful after" = only punctuation, filler, or a single
-        # word — but a bare "Computer" with nothing either side is a call for
-        # attention, not a question, so it waits like a LEADING trigger.
-        nothing_after = len(after_words) < 2
-        if nothing_after and before_words:
+        # word. A bare "Computer" with nothing either side is a call for
+        # attention rather than a question, so it waits like a LEADING trigger.
+        if len(after_words) < 2 and before_words:
             return TriggerPosition.TRAILING
-        if len(_words(before)) < self.leading_window:
+
+        # LEADING means *addressed*: nothing before the trigger but filler.
+        # This is the distinction that keeps "my computer is broken" out —
+        # it puts a real word in front of the trigger, so it is MEDIAL and
+        # subject to the sensitivity policy (F15). "hey computer" and
+        # "so, computer" are still leading, because "hey" and "so" carry no
+        # content of their own.
+        if not before_words and len(raw_before) <= self.max_leading_filler:
             return TriggerPosition.LEADING
         return TriggerPosition.MEDIAL
 

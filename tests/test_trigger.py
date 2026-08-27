@@ -131,3 +131,33 @@ def test_easter_egg_flag():
 def test_normalize():
     assert normalize_text("Hey, COMPUTER!!") == "hey computer"
     assert normalize_text("") == ""
+
+
+# -- the F15 cases that must stay quiet -----------------------------------
+
+QUIET = [
+    "my computer is broken and he laughed",
+    "the computer says no",
+    "I told him my computer is broken",
+    "this computer needs more memory",
+    "her computer crashed again yesterday",
+]
+
+
+@pytest.mark.parametrize("text", QUIET)
+def test_ordinary_mentions_do_not_wake_at_the_default_sensitivity(text):
+    assert parser().parse(text) is None
+
+
+ADDRESSED = [
+    "computer, what is the time",
+    "hey computer, what is the time",
+    "so, computer, what is the time",
+    "what is the time, computer",
+    "um, computer, what is the time",
+]
+
+
+@pytest.mark.parametrize("text", ADDRESSED)
+def test_being_addressed_always_wakes(text):
+    assert parser().parse(text) is not None

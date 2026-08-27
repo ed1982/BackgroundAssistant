@@ -162,3 +162,20 @@ class _MemoryKeyring:
 
     def delete_password(self, service, account):
         self.data.pop((service, account), None)
+
+
+def test_without_a_keychain_the_key_survives_a_restart(tmp_path, monkeypatch):
+    """A keychain-less machine keeps its key in a private file rather than in
+    memory, which would make every stored conversation unreadable on quit."""
+    from bgassist.storage.crypto import FileKeyStore
+
+    secrets = SecretStore(backend=None)
+    secrets._backend_ok = False
+    monkeypatch.setattr("bgassist.storage.crypto.FileKeyStore",
+                        lambda path=None: FileKeyStore(tmp_path / "dbkey"))
+    first = make_cipher(secrets, enabled=True)
+    blob = first.encrypt("a private thing")
+    second = make_cipher(secrets, enabled=True)
+    assert second.decrypt(blob) == "a private thing"
+    assert first.key_location == "file"
+    assert oct((tmp_path / "dbkey").stat().st_mode)[-3:] == "600"

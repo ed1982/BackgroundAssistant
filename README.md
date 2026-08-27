@@ -1,210 +1,181 @@
-# Star Trek Computer
+# BackgroundAssistant
 
-A cross-platform (macOS + Windows) **background voice assistant**. It runs
-silently in the system tray, continuously transcribes everything you say
-*locally*, and when it hears your wake word (default: **"computer"**), it
-waits for you to finish speaking, asks an LLM (local or cloud) about the
-recent conversation plus your command — and **speaks the answer back**.
+An always-on voice assistant that sits in your menu bar, listens for a trigger
+word, and answers out loud.
 
-```
-you:  "…did you hear that? computer, what is the current status?"
-        (transcribed continuously; wake word detected)
-        (waits ~1.5 s of silence = end of your question)
-computer: "All systems are nominal, captain."   (spoken aloud)
-```
+Say *"Computer, what time is it in Tokyo?"* — or *"what time is it in Tokyo,
+Computer?"*, which is the more natural phrasing and works just as well — and it
+answers. It hears the conversation in the room, so *"…what about Berlin?"* has
+something to refer to. Nothing you say is written to disk unless you actually
+triggered a question.
 
-See [plan.md](plan.md) for the full design document.
+Speech recognition runs locally on your machine. Only the exchanges you trigger
+are sent anywhere, and you can see exactly what was sent.
 
-## How it works
+---
 
-1. **Audio** — microphone captured at 16 kHz mono (`sounddevice`/PortAudio).
-2. **Endpointing** — `webrtcvad` splits the stream into utterances (700 ms of
-   silence ends one; 360 ms pre-roll keeps onsets unclipped).
-3. **Transcription** — every utterance is transcribed locally by
-   `faster-whisper` (default model `base.en`, int8 on CPU). The last 2 minutes
-   of transcript are kept in a rolling buffer.
-4. **Wake word** — each completed utterance is checked for the trigger word
-   (word-boundary, case-insensitive). On a match, the text *after* the trigger
-   becomes your command; further speech extends it until you pause.
-5. **LLM** — the recent transcript window + your command are sent to:
-   - **Ollama** (local, default) or any **OpenAI-compatible API** (cloud),
-   - a **mock** backend for tests/self-tests.
-6. **Speech** — the response is spoken with macOS `say` (default) or SAPI5 via
-   `pyttsx3` on Windows. While the computer thinks and speaks, your mic is
-   drained so it never hears itself.
+## What it does
 
-## Requirements
+| | |
+|---|---|
+| **Trigger** | Any word you choose, in any of the three natural positions: leading, mid-sentence, or trailing. A trailing trigger answers immediately, because you have already finished asking. |
+| **Listening** | Whisper, locally, on your machine. Apple's recogniser is available as an option. |
+| **Answering** | OpenAI, Claude, a local server (LM Studio · Ollama · llama.cpp · Pinokio), or any OpenAI-compatible URL. Answers stream and are spoken sentence by sentence, so speech starts in about a second. |
+| **Interrupting** | Say the trigger word while it is talking and it stops. What you heard is what it remembers saying. |
+| **Remembering** | Multi-turn conversations with a searchable history, encrypted on disk. |
+| **Privacy** | Ambient speech lives in memory only. Triggered exchanges are stored until you delete them. Keys live in the Keychain. |
 
-- Python **3.10–3.12** (macOS or Windows)
-- A microphone; on first run the OS will ask for mic permission — allow it.
-- One-time network access to download the whisper model (~75 MB for `base.en`).
-  After that everything runs offline (with a local LLM).
+## Install
 
-## Quick start
+**From a release:** download the DMG, drag the app to Applications, and read
+`Read Me First.txt` inside the DMG — the build is not signed with a paid Apple
+certificate yet, so the first launch needs right-click → Open.
+
+**From source:**
 
 ```bash
-# 1. Create a virtualenv and install dependencies
-python3 -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-
-# 2. (Optional) configure — defaults work out of the box
-cp config.example.json config.json
-
-# 3. (Optional) verify your audio chain with a recorded WAV
-python main.py --selftest my_recording.wav
-
-# 4. Run it (a tray icon appears; listening starts automatically)
+git clone <this repo> && cd BackgroundAssistant
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e '.[dev]'          # add ,macos or ,windows for platform extras
 python main.py
 ```
 
-### Choosing a local LLM (recommended, fully private)
+Requires Python 3.10–3.12. macOS is arm64; Intel Macs need to run from source.
 
-[Ollama](https://ollama.com):
+## First run
 
-```bash
-# macOS: brew install ollama   |   Windows: installer from ollama.com
-ollama pull llama3.2           # or any model you like
+The icon appears in the **menu bar**, not the Dock.
+
+1. Open **Preferences → AI**, pick a provider, and paste an API key. It goes
+   into the system Keychain — never into a file, never into a log. Press
+   **Test connection** and it will tell you exactly what happened, including
+   what a failure actually was.
+2. If you run a model locally, press **Detect local servers** instead. It probes
+   the usual ports (LM Studio 1234, Ollama 11434, llama.cpp 8080, 8000, 5000)
+   and lists what each one says it has.
+3. Grant microphone access when macOS asks.
+4. Say your trigger word.
+
+Everything else has a sensible default. There is no global shortcut unless you
+set one, and no notifications unless you turn them on.
+
+## The trigger word
+
+All three of these work:
+
+- "**Computer**, what is the answer?"
+- "Something has happened, **computer**, what is the answer?"
+- "What is the answer, **computer**?" ← answers immediately, no pause
+
+"My computer is broken" does **not** wake it. Preferences → General has three
+sensitivities: *Relaxed* wakes on any mention, *Balanced* (the default) requires
+the trigger to be addressed to it, and *Strict* only accepts it at the start or
+the end of a sentence.
+
+If your trigger word happens to be `computer`, there is a 🖖 next to it.
+
+## Privacy, precisely
+
+- **What you say near the machine** is transcribed into a rolling in-memory
+  buffer (two minutes by default). It is never written to disk, never logged,
+  and it evaporates when the buffer rolls or the app quits.
+- **An exchange you triggered** is stored: your question, the answer, and a
+  snapshot of the context that was actually sent — which the chat window will
+  show you, per message. Kept until you delete it.
+- **Message bodies are encrypted** with AES-256-GCM; the key is in the Keychain.
+  Titles and timestamps stay readable so the history list renders without
+  decrypting everything.
+- **Logs never contain transcripts.** There is a debug toggle that changes this,
+  it warns you, and it switches itself off after 24 hours.
+- **Keys are never written to the settings file**, never logged, and never sent
+  to the app's own UI — Preferences shows `sk-…4f2a` and nothing more.
+
+Preferences → Privacy has *Delete all conversations* and *Delete everything*.
+
+## Interrupting it
+
+Say the trigger word while it is speaking, press Stop in the tray or the chat
+window, or press Esc with the window focused.
+
+When you interrupt, it records **what you actually heard** — not what it had
+generated. So this works:
+
+> "Find out X please, Computer" → *"X is defined as…"* ← you cut in
+> "Computer, I'm sorry I meant Y"
+
+The second question is answered against a conversation in which it said "X is
+defined as" and nothing more, which is the conversation you experienced. The
+chat window will show you the rest of what it was about to say, dimmed, if you
+want it.
+
+## Command line
+
+```
+python main.py                     run the assistant
+python main.py --check             end-to-end check with fakes: no mic, no network
+python main.py --selftest file.wav run a recording through the real audio chain
+python main.py --selftest x.wav --expect trailing
+python main.py --doctor            what is installed, and where things live
+python main.py --list-devices      input devices
+python main.py --smoke             build the tray UI and exit
 ```
 
-The default config already points at `http://localhost:11434` with model
-`llama3.2`.
+`--check` is the fastest way to know the whole app is wired up correctly; it
+runs anywhere, including a Linux box with no audio stack at all.
 
-### Using a cloud LLM instead (e.g. OpenAI)
+## Where things live
 
-In `config.json`:
-
-```json
-"llm": {
-  "backend": "openai_compatible",
-  "base_url": "https://api.openai.com/v1",
-  "model": "gpt-5-mini",
-  "api_key_env": "OPENAI_API_KEY"
-}
-```
-
-**Note:** a ChatGPT subscription (Free/Plus/Pro) does **not** include API
-access. You need an API key from <https://platform.openai.com/api-keys>
-(same OpenAI login) plus billing/credits on the account — API usage is
-billed separately from any ChatGPT plan.
-
-Then `export OPENAI_API_KEY=sk-…` (macOS/Linux, e.g. in `~/.zshrc`) or
-`setx OPENAI_API_KEY sk-…` (Windows). The key is read from the environment
-only — never stored in the config file. If you run the app as a login item,
-put the `export` in that startup script too.
-
-Model choices (all valid as of 2026-08, see <https://developers.openai.com/api/docs/models>):
-
-| Model | Input / output price (per 1M tokens) | Notes |
-| --- | ---: | --- |
-| `gpt-5-mini` (default) | $0.25 / $2 | Near-frontier quality, low latency — good all-round pick for a voice assistant. |
-| `gpt-5-nano` | $0.05 / $0.40 | Fastest and cheapest; fine for short spoken answers. |
-| `gpt-5.6-luna` | $0.20 / $1.20 | Newest cost-optimized model, 1.1M context. |
-| `gpt-4o-mini` | — | Older but still available; safe fallback. |
-
-Any OpenAI-compatible endpoint works (OpenAI, Groq, LM Studio, llama.cpp
-server, …) — just change `base_url`/`model`. Verify your setup with:
-
-```bash
-.venv/bin/python -c "from starcop.config import load_config; from starcop.llm import make_llm; print(make_llm(load_config('config.json').llm).ask('', 'Say hello in one short sentence.'))"
-```
-
-With a missing/invalid key the app still runs; LLM calls fail with HTTP 401
-and it speaks the fallback apology instead.
-
-## Running at login (background, all the time)
-
-- **macOS**: System Settings → General → Login Items → add a small script,
-  e.g. `~/starcop-start.sh`:
-  ```bash
-  #!/bin/bash
-  cd /path/to/StarTrekComputer && .venv/bin/python main.py >> starcop.log 2>&1
-  ```
-  (For a no-Dock-icon experience, build an app bundle with `LSUIElement=true`
-  — see Packaging below.)
-- **Windows**: press `Win+R`, type `shell:startup`, and drop a shortcut there
-  whose target is `.venv\Scripts\pythonw.exe main.py` (working directory =
-  this folder). `pythonw` keeps it out of the console.
-
-## Tray menu
-
-- **Status** — live state: Idle / Awaiting command… / Thinking… / Speaking…
-- **Start/Stop listening** — toggle the microphone pipeline.
-- **Speak test** — verifies TTS output ("Aye aye, captain…").
-- **Quit**.
-
-## Configuration reference (`config.json`)
-
-All keys are optional; defaults shown. Copy `config.example.json` to start.
-
-| Key | Default | Meaning |
+| | macOS | Windows |
 |---|---|---|
-| `trigger_words` | `["computer"]` | Wake words/aliases (word-boundary matched). |
-| `language` | `"en"` | Whisper language hint (`null` = auto-detect). |
-| `whisper_model` | `"base.en"` | `tiny.en`, `base.en`, `small.en`, … (bigger = more accurate, slower). |
-| `compute_type` | `"int8"` | CTranslate2 compute type. |
-| `audio_device` | `null` | Input device index/name (`python main.py --list-devices`). |
-| `vad_aggressiveness` | `2` | webrtcvad 0–3 (higher = stricter speech filtering). |
-| `pre_roll_ms` / `end_silence_ms` | `360` / `700` | Endpointing: pre-roll kept; silence that ends an utterance. |
-| `min_utterance_ms` / `max_utterance_ms` | `300` / `30000` | Utterance length guards. |
-| `command_end_silence_ms` | `1500` | Silence after the wake word that ends your command. |
-| `max_command_wait_ms` | `12000` | Hard cap from wake word to dispatch. |
-| `context_seconds` | `120` | Rolling transcript window loaded into the LLM. |
-| `llm.backend` | `"ollama"` | `ollama` \| `openai_compatible` \| `mock`. |
-| `llm.base_url` / `llm.model` | Ollama defaults | Endpoint and model name. |
-| `llm.api_key_env` | `"OPENAI_API_KEY"` | Env var holding the API key. |
-| `tts.engine` | `"auto"` | `auto` (say on macOS, pyttsx3 on Windows) \| `say` \| `pyttsx3` \| `mock`. |
-| `tts.rate` / `tts.voice` | `185` / `null` | Speech rate (wpm) and optional voice name. |
-| `log_file` / `log_level` | `"starcop.log"` / `"INFO"` | Logging. |
+| Settings | `~/Library/Application Support/BackgroundAssistant/settings.json` | `%APPDATA%\BackgroundAssistant\` |
+| Conversations | the same folder, `conversations.db` (encrypted) | the same |
+| Logs | `~/Library/Logs/BackgroundAssistant/` (rotating, 1 MB × 3) | `%LOCALAPPDATA%\BackgroundAssistant\logs\` |
+| Models | the data folder, `models/` | the same |
+| API keys | Keychain | Credential Manager |
 
-Notes:
-- `pyttsx3` on **macOS** additionally needs `pip install pyobjc`; the macOS
-  default engine is `say`, so this is only relevant if you opt in.
-- Wake-word matching is transcript-based: any utterance that *contains* the
-  trigger word wakes the assistant. Pick a word you rarely say in normal
-  conversation, or add aliases to narrow it down.
+Nothing is written next to the code. Set `BGASSIST_HOME` to override all of it,
+which is what the test suite does.
 
-## CLI
+Upgrading from the earlier version of this project: the old `config.json` is
+imported automatically on first run, and if `OPENAI_API_KEY` is set in the
+environment the key is copied into the Keychain — after which you can remove
+that export from your shell profile.
+
+## Development
 
 ```bash
-python main.py                     # run the background assistant (tray icon)
-python main.py --selftest FILE.wav # real audio chain on a WAV (mono 16-bit,
-                                   #   16 kHz); prints transcript + what would
-                                   #   be sent to the LLM / spoken. Exit 0 = wake
-                                   #   word detected, 1 = not detected.
-python main.py --smoke             # build the tray app without audio, then exit
-python main.py --list-devices      # list input devices
-python main.py --config PATH       # use a specific config file
+python -m pytest -q        # ~190 tests, about 15 seconds, no heavy deps needed
+python -m pytest -m integration   # the real audio chain (macOS, downloads a model)
+python main.py --check
 ```
 
-To make a self-test WAV on macOS: `say -o t.aiff "computer, hello" &&
-afconvert -f WAVE -d LEI16@16000 -c 1 t.aiff t.wav`. On Windows, record any
-WAV and convert with ffmpeg: `ffmpeg -i in.wav -ar 16000 -ac 1 -sample_fmt s16 t.wav`.
+The pure-logic core — the segmenter, the trigger grammar, the orchestrator, the
+transcript buffer and the settings — has no I/O in it and takes everything by
+injection, including the clock. That is why the tests are fast and deterministic
+and why heavy dependencies are imported lazily, inside functions.
 
-## Testing
-
-```bash
-pip install -r requirements-dev.txt
-pytest                 # unit tests (fast, no heavy deps needed)
-pytest -m integration  # real-audio end-to-end test (macOS; downloads whisper model)
+```
+bgassist/
+  core/       segmenter · trigger grammar · orchestrator · responder · events
+  audio/      capture (bounded queues) · VAD · wake-word spotter · chime
+  stt/        whisper · apple · the transcriber protocol
+  llm/        openai · anthropic · local + discovery · prompts · streaming
+  tts/        piper · system voices · sentence chunking
+  settings/   schema · store · keychain · migration
+  storage/    encrypted conversations · AES-256-GCM
+  ui/         tray · chat window · preferences · the QWebChannel bridge
+  platform/   paths · login item · hotkey · notifications
+  engine.py   the worker threads and the queues between them
 ```
 
-The unit suite covers the wake-word matcher, transcript buffer, endpointing
-state machine, full pipeline state machine (with fake clock/LLM/TTS), LLM
-backends against a local HTTP server, TTS engines, and config loading.
+Design and rationale: [`refactor.md`](refactor.md). The original design
+document, describing the version this replaced, is [`plan.md`](plan.md).
 
-## Packaging (optional)
+## Building
 
-- **PyInstaller** works on both OSes; collect the CTranslate2/faster-whisper
-  data files (`--collect-all faster_whisper --collect-all ctranslate2`) and
-  the PortAudio library bundled with `sounddevice`.
-- **macOS**: set `LSUIElement` to true in the bundle's Info.plist so the app
-  has no Dock icon (pure background/accessory app).
-- **Windows**: `pythonw` or a PyInstaller `--noconsole` build keeps it out of
-  the console; add to `shell:startup` for boot-time launch.
+See [`build/README.md`](build/README.md). Expect 400–600 MB installed, most of
+it Qt WebEngine and the speech model.
 
-## Privacy
+## Licence
 
-Audio is processed locally and never uploaded. The only network traffic is:
-the one-time whisper model download, and LLM requests — to your local Ollama
-by default, or to a cloud endpoint only if you configure one.
+MIT.

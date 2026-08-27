@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key><string>BackgroundAssistant</string>
+  <key>CFBundleDisplayName</key><string>BackgroundAssistant</string>
+  <key>CFBundleIdentifier</key><string>com.edmartin.backgroundassistant</string>
+  <key>CFBundleVersion</key><string>__VERSION__</string>
+  <key>CFBundleShortVersionString</key><string>__VERSION__</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleExecutable</key><string>BackgroundAssistant</string>
+  <key>CFBundleIconFile</key><string>icon.icns</string>
+
+  <!-- Menu-bar only: no Dock icon, no window on launch. -->
+  <key>LSUIElement</key><true/>
+  <key>LSMinimumSystemVersion</key><string>13.0</string>
+  <key>NSHighResolutionCapable</key><true/>
+
+  <key>NSMicrophoneUsageDescription</key>
+  <string>BackgroundAssistant listens for your trigger word so it can answer questions. Speech is transcribed on this Mac and is not written to disk unless you asked a question.</string>
+  <key>NSSpeechRecognitionUsageDescription</key>
+  <string>Used only if you choose Apple speech recognition in Preferences instead of the built-in Whisper model.</string>
+</dict>
+</plist>

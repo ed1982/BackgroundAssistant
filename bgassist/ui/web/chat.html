@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self' qrc:; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
+  <title>BackgroundAssistant</title>
+  <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="chat.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="rail">
+      <div class="rail-head">
+        <input id="search" type="text" placeholder="Search conversations" autocomplete="off">
+        <button id="new-chat" title="New conversation">＋</button>
+      </div>
+      <ul id="conversations" class="conversations"></ul>
+      <div class="rail-foot faint" id="rail-foot"></div>
+    </aside>
+
+    <main class="main">
+      <header class="header">
+        <div>
+          <div id="title" class="title">New conversation</div>
+          <div id="status" class="status faint">Listening</div>
+        </div>
+        <div class="header-actions">
+          <button id="export" title="Export as Markdown">Export</button>
+          <button id="stop" class="hidden">Stop</button>
+        </div>
+      </header>
+
+      <div id="messages" class="messages" aria-live="polite"></div>
+
+      <footer class="composer">
+        <button id="ptt" class="ptt" title="Push to talk">🎙</button>
+        <textarea id="input" rows="1" placeholder="Ask something…"></textarea>
+        <button id="send" class="primary">Send</button>
+      </footer>
+      <div class="composer-meta faint">
+        <span id="provider"></span>
+        <span id="trigger-hint"></span>
+      </div>
+    </main>
+  </div>
+
+  <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+  <script src="vendor/markdown.js"></script>
+  <script src="chat.js"></script>
+</body>
+</html>

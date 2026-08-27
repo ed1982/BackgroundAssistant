@@ -1,115 +1,169 @@
-"""System-tray UI (PySide6).
+"""The menu-bar item: status, state icon, and the way into everything else.
 
-Importing this module does not require PySide6; call ``create_tray_app()``
-to build the Qt objects. State changes arrive from the worker thread and
-are marshalled to the GUI thread via a queued Qt signal.
+Importing this module does not require PySide6; ``create_tray()`` builds the Qt
+objects. State changes arrive from worker threads and are marshalled onto the
+GUI thread through a queued Qt signal, which is the only safe way to touch
+widgets from another thread.
 """
 from __future__ import annotations
 
 import logging
-from typing import Callable, Tuple
+from typing import Tuple
 
-log = logging.getLogger("starcop.app")
+from bgassist import APP_NAME, __version__
+from bgassist.core import events
+from bgassist.ui import icons
 
-_STATE_LABELS = {
-    "idle": "Idle — listening",
-    "awaiting_command": "Awaiting command…",
+log = logging.getLogger("bgassist.ui.tray")
+
+STATE_LABELS = {
+    "idle": "Listening",
+    "awaiting_command": "Listening for your question…",
     "thinking": "Thinking…",
     "speaking": "Speaking…",
 }
 
 
-def create_tray_app(pipeline, start_listening: Callable[[], None],
-                    stop_all: Callable[[], None],
-                    autostart: bool = True) -> Tuple["object", "object"]:
-    """Build (QApplication, QSystemTrayIcon) wired to the pipeline.
+def create_tray(application) -> Tuple[object, object]:
+    """Build (QApplication, QSystemTrayIcon) wired to *application*."""
+    from PySide6.QtCore import QObject, Qt, Signal
+    from PySide6.QtGui import QAction, QIcon, QPixmap
+    from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
-    *start_listening* starts capture + worker; *stop_all* stops both.
-    Returns the app and tray so the caller can run ``app.exec()``.
-    """
-    from PySide6.QtCore import QObject, Signal
-    from PySide6.QtGui import QAction
-    from PySide6.QtWidgets import QApplication, QMenu, QStyle, QSystemTrayIcon
-
-    class _Bridge(QObject):
+    class Bridge(QObject):
         state_changed = Signal(str)
+        error_occurred = Signal(str)
+        backlog = Signal(int)
 
-    app = QApplication.instance() or QApplication([])
-    bridge = _Bridge()
+    qt_app = QApplication.instance() or QApplication([])
+    qt_app.setQuitOnLastWindowClosed(False)  # a menu-bar app has no windows
+    qt_app.setApplicationName(APP_NAME)
+    bridge = Bridge()
+
+    def icon_for(state: str) -> QIcon:
+        pixmap = QPixmap()
+        pixmap.loadFromData(icons.tray_icon_bytes(state, 44), "PNG")
+        icon = QIcon(pixmap)
+        icon.setIsMask(True)  # template image: macOS tints it for us
+        return icon
 
     tray = QSystemTrayIcon()
-    tray.setToolTip("Star Trek Computer")
-    # No bundled icon asset: use a standard style icon (zero binary files).
-    tray.setIcon(app.style().standardIcon(
-        QStyle.StandardPixmap.SP_ComputerIcon))
+    tray.setIcon(icon_for("idle"))
 
     menu = QMenu()
-    status_action = QAction("Status: starting…", tray)
+    status_action = QAction("Starting…", tray)
     status_action.setEnabled(False)
     menu.addAction(status_action)
+
+    trigger_action = QAction("", tray)
+    trigger_action.setEnabled(False)
+    menu.addAction(trigger_action)
     menu.addSeparator()
 
-    listening = {"flag": False}
+    def refresh_trigger_label() -> None:
+        general = application.settings.general
+        words = ", ".join(general.trigger_words)
+        # 🖖 beside the trigger word when it is exactly "computer" (D2).
+        suffix = "  🖖" if general.easter_egg else ""
+        trigger_action.setText(f"Say “{words}”{suffix}")
 
-    def _set_status(text: str) -> None:
-        status_action.setText(f"Status: {text}")
+    def set_status(text: str) -> None:
+        status_action.setText(text)
+        tray.setToolTip(f"{APP_NAME} — {text}")
 
-    def _on_state(state) -> None:
-        label = _STATE_LABELS.get(getattr(state, "value", str(state)), str(state))
-        _set_status(label)
+    def on_state(value: str) -> None:
+        set_status(STATE_LABELS.get(value, value))
+        tray.setIcon(icon_for(value))
 
-    bridge.state_changed.connect(_on_state)
-    pipeline.on_state_change = lambda s: bridge.state_changed.emit(  # noqa: B023
-        getattr(s, "value", str(s)))
+    def on_error(message: str) -> None:
+        set_status(f"⚠ {message}")
 
-    def _start() -> None:
-        if listening["flag"]:
-            return
+    def on_backlog(dropped: int) -> None:
+        set_status(f"⚠ Audio is backing up ({dropped} frames dropped)")
+
+    bridge.state_changed.connect(on_state, Qt.ConnectionType.QueuedConnection)
+    bridge.error_occurred.connect(on_error, Qt.ConnectionType.QueuedConnection)
+    bridge.backlog.connect(on_backlog, Qt.ConnectionType.QueuedConnection)
+
+    application.bus.subscribe(
+        events.StateChanged, lambda e: bridge.state_changed.emit(e.state))
+    application.bus.subscribe(
+        events.ErrorOccurred, lambda e: bridge.error_occurred.emit(e.message))
+    application.bus.subscribe(
+        events.AudioBacklog, lambda e: bridge.backlog.emit(e.dropped_frames))
+
+    # -- actions ---------------------------------------------------------
+    chat_action = QAction("Open chat…", tray)
+    chat_action.triggered.connect(application.show_chat)
+    menu.addAction(chat_action)
+
+    prefs_action = QAction("Preferences…", tray)
+    prefs_action.triggered.connect(application.show_preferences)
+    menu.addAction(prefs_action)
+    menu.addSeparator()
+
+    listen_action = QAction("Stop listening", tray)
+
+    def refresh_listen_label() -> None:
+        listen_action.setText("Stop listening" if application.listening
+                              else "Start listening")
+
+    def toggle_listening() -> None:
         try:
-            start_listening()
-            listening["flag"] = True
-            start_action.setText("Stop listening")
-        except Exception as exc:  # noqa: BLE001 - surface mic/permission errors
-            log.exception("failed to start listening")
-            _set_status(f"Error: {exc}")
+            if application.listening:
+                application.stop_listening()
+                set_status("Stopped")
+            else:
+                application.start_listening()
+                set_status(STATE_LABELS["idle"])
+        except Exception as exc:  # noqa: BLE001 - mic permission errors land here
+            log.exception("could not change the listening state")
+            set_status(f"⚠ {exc}")
+        refresh_listen_label()
 
-    def _stop() -> None:
-        if not listening["flag"]:
-            return
-        stop_all()
-        listening["flag"] = False
-        start_action.setText("Start listening")
-        _set_status("Stopped")
+    listen_action.triggered.connect(toggle_listening)
+    menu.addAction(listen_action)
 
-    start_action = QAction("Start listening", tray)
-    start_action.triggered.connect(
-        lambda: _stop() if listening["flag"] else _start())
-    menu.addAction(start_action)
+    stop_action = QAction("Stop speaking", tray)
+    stop_action.triggered.connect(lambda: application.orchestrator.cancel("stop"))
+    menu.addAction(stop_action)
+    menu.addSeparator()
 
-    def _speak_test() -> None:
-        try:
-            pipeline.tts.speak("Aye aye, captain. All systems operational.")
-        except Exception as exc:  # noqa: BLE001
-            log.error("speak test failed: %s", exc)
-
-    test_action = QAction("Speak test", tray)
-    test_action.triggered.connect(_speak_test)
-    menu.addAction(test_action)
+    about_action = QAction(f"{APP_NAME} {__version__}", tray)
+    about_action.setEnabled(False)
+    menu.addAction(about_action)
 
     quit_action = QAction("Quit", tray)
 
-    def _quit() -> None:
-        stop_all()
-        app.quit()
+    def quit_app() -> None:
+        application.shutdown()
+        qt_app.quit()
 
-    quit_action.triggered.connect(_quit)
+    quit_action.triggered.connect(quit_app)
     menu.addAction(quit_action)
 
     tray.setContextMenu(menu)
-    _set_status(_STATE_LABELS.get(pipeline.state.value, pipeline.state.value))
+    tray.activated.connect(
+        lambda reason: application.show_chat()
+        if reason == QSystemTrayIcon.ActivationReason.Trigger else None)
+
+    refresh_trigger_label()
+    refresh_listen_label()
+    set_status(STATE_LABELS.get(application.orchestrator.state.value, "Ready"))
     tray.show()
 
-    if autostart:
-        _start()
+    application.settings_store.subscribe(
+        lambda settings, changed: refresh_trigger_label())
 
-    return app, tray
+    # The optional global shortcut (D17a): dormant unless one has been set.
+    from bgassist.platform.hotkey import GlobalHotkey
+
+    hotkey = GlobalHotkey(application.show_chat)
+    hotkey.set_sequence(application.settings.general.hotkey, parent=menu)
+    application.settings_store.subscribe(
+        lambda settings, changed: hotkey.set_sequence(settings.general.hotkey,
+                                                      parent=menu)
+        if "general.hotkey" in changed else None)
+    tray._hotkey = hotkey  # keep it alive
+
+    return qt_app, tray

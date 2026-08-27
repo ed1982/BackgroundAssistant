@@ -97,6 +97,36 @@ def load_or_create_key(secret_store, account: str = "conversation-db-key") -> by
     return key
 
 
+class FileKeyStore:
+    """Last-resort key storage: one 0600 file in the data directory.
+
+    Used only when there is no system keychain at all. It is weaker than the
+    Keychain and the Privacy tab says so — but it is the difference between
+    "your old conversations are unreadable after a restart" and not, because a
+    keychain-less :class:`SecretStore` keeps its keys in memory only.
+    """
+
+    location = "file"
+
+    def __init__(self, path=None):
+        if path is None:
+            from bgassist.platform import paths
+
+            path = paths.data_dir() / "dbkey"
+        self.path = path
+
+    def get(self, account: str) -> str:
+        try:
+            return self.path.read_text(encoding="ascii").strip()
+        except OSError:
+            return ""
+
+    def set(self, account: str, secret: str) -> None:
+        from bgassist.platform import paths
+
+        paths.secure_write(self.path, secret)
+
+
 def make_cipher(secret_store=None, enabled: bool = True,
                 account: str = "conversation-db-key"):
     """The cipher the conversation store should use, or a Null one if it cannot.
@@ -107,8 +137,16 @@ def make_cipher(secret_store=None, enabled: bool = True,
     """
     if not enabled or secret_store is None:
         return NullCipher()
+    if not getattr(secret_store, "available", True):
+        # No keychain: an in-memory key would be lost on quit, taking every
+        # stored conversation with it.
+        log.warning("no system keychain; the conversation key will be kept in a "
+                    "private file instead — see Preferences → Privacy")
+        secret_store = FileKeyStore()
     try:
-        return AesGcmCipher(load_or_create_key(secret_store, account))
+        cipher = AesGcmCipher(load_or_create_key(secret_store, account))
+        cipher.key_location = getattr(secret_store, "location", "keychain")
+        return cipher
     except (CryptoUnavailable, ValueError) as exc:
         log.error("conversation encryption is unavailable (%s); storing in the "
                   "clear — see Preferences → Privacy", exc)
@@ -117,7 +155,8 @@ def make_cipher(secret_store=None, enabled: bool = True,
 
 def encryption_status(cipher) -> dict:
     return {"encrypted": bool(getattr(cipher, "encrypted", False)),
-            "algorithm": getattr(cipher, "name", "unknown")}
+            "algorithm": getattr(cipher, "name", "unknown"),
+            "key_location": getattr(cipher, "key_location", "none")}
 
 
 def key_fingerprint(key: Optional[bytes]) -> str:  # pragma: no cover - display only

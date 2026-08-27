@@ -1,0 +1,56 @@
+body { display: flex; flex-direction: column; height: 100%; }
+
+.tabs {
+  display: flex; gap: 2px; padding: 10px 14px 0;
+  border-bottom: 1px solid var(--line); background: var(--bg-sunken);
+}
+.tabs button {
+  background: none; border: none; border-bottom: 2px solid transparent;
+  border-radius: 0; padding: 8px 14px; color: var(--text-dim);
+}
+.tabs button:hover { color: var(--text); }
+.tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
+
+.panes { flex: 1; overflow-y: auto; padding: 22px 26px 40px; }
+.pane { display: none; max-width: 620px; }
+.pane.active { display: block; }
+
+.field { display: block; margin-bottom: 18px; }
+.label { display: block; font-weight: 550; margin-bottom: 6px; }
+.hint { display: block; color: var(--text-faint); font-size: 12px; margin-top: 6px; }
+.hint.warn { color: var(--warn); }
+.row { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+.row input, .row select { flex: 1; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+.check { display: flex; gap: 9px; align-items: flex-start; margin-bottom: 14px; }
+.check input { margin-top: 3px; }
+
+.note {
+  background: var(--bg-raised); border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm); padding: 10px 12px; color: var(--text-dim);
+}
+.status-line { color: var(--text-dim); font-size: 13px; margin: 8px 0; }
+.result { margin-top: 10px; font-size: 13px; }
+.result.ok { color: var(--accent); }
+.result.error { color: var(--error); }
+
+.servers { margin-top: 10px; }
+.server {
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  padding: 10px 12px; margin-bottom: 8px;
+}
+.server .name { font-weight: 600; }
+.server .url { font-family: var(--mono); font-size: 12px; color: var(--text-dim); }
+.server .note { background: none; border: none; padding: 0; margin-top: 4px; font-size: 12px; }
+
+button.danger { border-color: var(--error); color: var(--error); }
+button.danger:hover { background: var(--error); color: var(--bg); }
+
+.toast {
+  position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
+  background: var(--bg-raised); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 8px 14px; opacity: 0;
+  transition: opacity .2s ease; pointer-events: none;
+}
+.toast.show { opacity: 1; }

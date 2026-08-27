@@ -33,3 +33,10 @@ models/
 
 # Misc
 uv-aarch64-apple-darwin.tar.gz
+
+# Generated icon ladder (tools/make_icons.py)
+assets/icon.iconset/
+assets/tray/
+assets/*.png
+assets/*.ico
+assets/*.icns

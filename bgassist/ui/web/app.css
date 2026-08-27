@@ -1,0 +1,87 @@
+/* Shared design tokens for both windows.
+   Dark by default with a light theme following the system; generous type; one
+   restrained accent, the soft aqua of the icon. Deliberately not LCARS. */
+:root {
+  --bg: #14181e;
+  --bg-raised: #1b2028;
+  --bg-sunken: #10141a;
+  --line: #2a323d;
+  --text: #e7edf3;
+  --text-dim: #9aa7b4;
+  --text-faint: #6b7885;
+  --accent: #7ed6d6;
+  --accent-strong: #a5e9e9;
+  --accent-ink: #06222a;
+  --warn: #e5a95b;
+  --error: #e57373;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f6f8fa;
+    --bg-raised: #ffffff;
+    --bg-sunken: #eef1f5;
+    --line: #dde3ea;
+    --text: #1b2129;
+    --text-dim: #5a6673;
+    --text-faint: #8a949f;
+    --accent: #14808a;
+    --accent-strong: #0d6a73;
+    --accent-ink: #ffffff;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  cursor: pointer;
+}
+button:hover { border-color: var(--accent); }
+button.primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: transparent;
+  font-weight: 600;
+}
+button:disabled { opacity: .5; cursor: default; }
+
+input[type="text"], input[type="password"], input[type="number"], select,
+textarea {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg-sunken);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 7px 10px;
+  width: 100%;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+textarea { resize: vertical; min-height: 90px; font-family: var(--font); }
+
+.muted { color: var(--text-dim); }
+.faint { color: var(--text-faint); font-size: 12px; }
+.spock { font-size: 13px; }

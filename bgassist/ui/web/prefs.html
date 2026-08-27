@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self' qrc:; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
+  <title>Preferences</title>
+  <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="prefs.css">
+</head>
+<body>
+  <nav class="tabs" id="tabs">
+    <button data-tab="general" class="active">General</button>
+    <button data-tab="ai">AI</button>
+    <button data-tab="voice">Voice</button>
+    <button data-tab="listening">Listening</button>
+    <button data-tab="privacy">Privacy</button>
+    <button data-tab="advanced">Advanced</button>
+  </nav>
+
+  <main class="panes">
+    <!-- General ------------------------------------------------------- -->
+    <section class="pane active" data-pane="general">
+      <label class="field">
+        <span class="label">Trigger word<span id="spock" class="spock"></span></span>
+        <input id="trigger-words" type="text" data-setting="general.trigger_words">
+        <span class="hint">Comma-separated. Choose something you rarely say in
+          ordinary conversation.</span>
+      </label>
+
+      <label class="field">
+        <span class="label">Sensitivity</span>
+        <select id="sensitivity" data-setting="general.sensitivity">
+          <option value="relaxed">Relaxed — wake whenever the word is heard</option>
+          <option value="balanced">Balanced — ignore it mid-sentence</option>
+          <option value="strict">Strict — only at the start or the end</option>
+        </select>
+        <span class="hint">Balanced ignores “my computer is broken” but still
+          hears “so, computer, what time is it”.</span>
+      </label>
+
+      <label class="check">
+        <input id="autostart" type="checkbox" data-setting="general.autostart_listening">
+        <span>Start listening when the app opens</span>
+      </label>
+
+      <label class="check">
+        <input id="login-item" type="checkbox" data-setting="general.launch_at_login">
+        <span>Launch at login</span>
+      </label>
+
+      <label class="check">
+        <input id="notifications" type="checkbox" data-setting="general.notifications">
+        <span>Also post a notification for spoken answers</span>
+      </label>
+
+      <label class="field">
+        <span class="label">Open chat with a shortcut</span>
+        <input id="hotkey" type="text" placeholder="None — e.g. Ctrl+Shift+Space"
+               data-setting="general.hotkey">
+        <span class="hint">Unset by default, so nothing collides with Spotlight.</span>
+      </label>
+    </section>
+
+    <!-- AI ------------------------------------------------------------ -->
+    <section class="pane" data-pane="ai">
+      <label class="field">
+        <span class="label">Provider</span>
+        <select id="provider" data-setting="ai.provider"></select>
+      </label>
+
+      <label class="field">
+        <span class="label">Base URL</span>
+        <input id="base-url" type="text" data-setting="ai.base_url">
+      </label>
+
+      <div class="field">
+        <span class="label">API key</span>
+        <div class="row">
+          <input id="api-key" type="password" placeholder="Not set">
+          <button id="save-key">Save</button>
+          <button id="clear-key">Clear</button>
+        </div>
+        <span class="hint" id="key-hint">Stored in the system keychain. It is
+          never written to the settings file and never shown again.</span>
+      </div>
+
+      <div class="field">
+        <span class="label">Model</span>
+        <div class="row">
+          <input id="model" type="text" data-setting="ai.model" list="model-list">
+          <datalist id="model-list"></datalist>
+          <button id="refresh-models">Refresh</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <button id="test-connection" class="primary">Test connection</button>
+        <button id="detect-servers">Detect local servers</button>
+      </div>
+      <div id="connection-result" class="result"></div>
+      <div id="servers" class="servers"></div>
+
+      <label class="field">
+        <span class="label">System prompt</span>
+        <textarea id="system-prompt" data-setting="ai.system_prompt"></textarea>
+        <span class="row"><button id="restore-prompt">Restore the default persona</button></span>
+      </label>
+
+      <div class="grid">
+        <label class="field">
+          <span class="label">Temperature</span>
+          <input id="temperature" type="number" step="0.1" min="0" max="2"
+                 data-setting="ai.temperature">
+        </label>
+        <label class="field">
+          <span class="label">Context window (seconds)</span>
+          <input id="context-seconds" type="number" min="0" max="900"
+                 data-setting="ai.context_seconds">
+        </label>
+      </div>
+
+      <label class="check">
+        <input id="auto-title" type="checkbox" data-setting="ai.auto_title">
+        <span>Name conversations automatically after the first exchange</span>
+      </label>
+    </section>
+
+    <!-- Voice --------------------------------------------------------- -->
+    <section class="pane" data-pane="voice">
+      <label class="field">
+        <span class="label">Speech engine</span>
+        <select id="tts-engine" data-setting="voice.engine">
+          <option value="auto">Automatic — Piper if installed, else the system voice</option>
+          <option value="piper">Piper (local neural voice)</option>
+          <option value="system">System voice</option>
+        </select>
+      </label>
+
+      <div class="field">
+        <span class="label">Voice</span>
+        <div class="row">
+          <select id="voice" data-setting="voice.voice"></select>
+          <button id="preview-voice">Preview</button>
+        </div>
+      </div>
+
+      <label class="field">
+        <span class="label">Rate</span>
+        <input id="rate" type="number" min="80" max="400" data-setting="voice.rate">
+      </label>
+
+      <label class="check">
+        <input id="chime" type="checkbox" data-setting="voice.chime">
+        <span>Play a chime the moment the trigger word is heard</span>
+      </label>
+
+      <label class="check">
+        <input id="speak-typed" type="checkbox" data-setting="voice.speak_typed_answers">
+        <span>Speak answers to questions I typed</span>
+      </label>
+    </section>
+
+    <!-- Listening ----------------------------------------------------- -->
+    <section class="pane" data-pane="listening">
+      <label class="field">
+        <span class="label">Input device</span>
+        <select id="input-device" data-setting="listening.input_device"></select>
+      </label>
+
+      <label class="field">
+        <span class="label">Speech recognition</span>
+        <select id="stt-engine" data-setting="listening.stt_engine">
+          <option value="whisper">Whisper (recommended — coexists with Voice Control)</option>
+          <option value="apple">Apple speech recognition — may conflict with Voice Control</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span class="label">Whisper model</span>
+        <select id="whisper-model" data-setting="listening.whisper_model"></select>
+        <span class="hint">Larger models are more accurate and slower. The first
+          use of a new model downloads it.</span>
+      </label>
+
+      <label class="field">
+        <span class="label">Voice-activity aggressiveness</span>
+        <input id="vad" type="number" min="0" max="3" data-setting="listening.vad_aggressiveness">
+      </label>
+
+      <div class="grid">
+        <label class="field">
+          <span class="label">End-of-speech silence (ms)</span>
+          <input type="number" data-setting="listening.end_silence_ms">
+        </label>
+        <label class="field">
+          <span class="label">Command-end silence (ms)</span>
+          <input type="number" data-setting="listening.command_end_silence_ms">
+        </label>
+        <label class="field">
+          <span class="label">Maximum wait (ms)</span>
+          <input type="number" data-setting="listening.max_command_wait_ms">
+        </label>
+        <label class="field">
+          <span class="label">Pre-roll (ms)</span>
+          <input type="number" data-setting="listening.pre_roll_ms">
+        </label>
+      </div>
+
+      <label class="check">
+        <input type="checkbox" data-setting="listening.barge_in">
+        <span>Let the trigger word interrupt an answer</span>
+      </label>
+
+      <label class="check">
+        <input type="checkbox" data-setting="listening.spotter_enabled">
+        <span>Use the acoustic wake-word spotter for an instant response
+          (experimental)</span>
+      </label>
+    </section>
+
+    <!-- Privacy ------------------------------------------------------- -->
+    <section class="pane" data-pane="privacy">
+      <p class="note">Ambient speech is transcribed in memory and never written
+        to disk. Only exchanges you actually triggered are stored — your
+        question, the answer, and the context that was sent — and they are kept
+        until you delete them.</p>
+
+      <div class="status-line" id="encryption-status"></div>
+      <div class="status-line" id="counts"></div>
+
+      <label class="check">
+        <input type="checkbox" data-setting="privacy.encrypt_conversations">
+        <span>Encrypt stored conversations</span>
+      </label>
+
+      <label class="check">
+        <input id="auto-delete" type="checkbox" data-setting="privacy.auto_delete_enabled">
+        <span>Delete conversations automatically after a while</span>
+      </label>
+      <label class="field">
+        <span class="label">Keep for (days)</span>
+        <input type="number" min="1" max="3650" data-setting="privacy.retention_days">
+      </label>
+
+      <label class="check">
+        <input id="transcript-debug" type="checkbox" data-setting="privacy.transcript_debug">
+        <span>Debug: include transcripts in logs</span>
+      </label>
+      <p class="hint warn" id="transcript-warning">While this is on, everything
+        you say near the machine is written to the log file. It switches itself
+        off after 24 hours.</p>
+
+      <div class="row">
+        <button id="delete-conversations">Delete all conversations</button>
+        <button id="delete-everything" class="danger">Delete everything</button>
+      </div>
+    </section>
+
+    <!-- Advanced ------------------------------------------------------ -->
+    <section class="pane" data-pane="advanced">
+      <label class="field">
+        <span class="label">Log level</span>
+        <select data-setting="advanced.log_level">
+          <option>DEBUG</option><option>INFO</option>
+          <option>WARNING</option><option>ERROR</option>
+        </select>
+      </label>
+
+      <div class="row">
+        <button id="reveal-logs">Reveal logs</button>
+        <button id="reveal-data">Reveal data folder</button>
+        <button id="export-settings">Copy settings as JSON</button>
+      </div>
+
+      <div class="status-line" id="paths"></div>
+      <div class="row"><button id="factory-reset" class="danger">Factory reset</button></div>
+      <div class="status-line faint" id="version"></div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+  <script src="prefs.js"></script>
+</body>
+</html>
