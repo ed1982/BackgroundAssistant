@@ -78,7 +78,6 @@ class Orchestrator:
         self._match: Optional[TriggerMatch] = None
         self._conversation_id: Optional[int] = None
         self._user_message_id: Optional[int] = None
-        self._spoke_anything = False
         #: While the chat window's push-to-talk button is held, speech is
         #: addressed to us by definition and the trigger word is bypassed (D10).
         self.push_to_talk = False
@@ -120,10 +119,10 @@ class Orchestrator:
         try:
             text = (self.transcriber.transcribe(audio) or "").strip()
         except TranscriberError as exc:
-            self._report_error(exc.user_message, str(exc), fatal=not exc.transient)
+            self.report_error(exc.user_message, str(exc), fatal=not exc.transient)
             return
         except Exception as exc:  # noqa: BLE001 - an unexpected type is still not fatal
-            self._report_error("Speech recognition failed.", str(exc))
+            self.report_error("Speech recognition failed.", str(exc))
             return
         if text:
             self.on_transcript(text)
@@ -351,7 +350,6 @@ class Orchestrator:
         log.info("dispatching to the model (reason=%s, %d context line(s))",
                  reason, len(context.splitlines()) if context else 0)
         self._set_state(State.THINKING)
-        self._spoke_anything = False
 
         history: List[dict] = []
         self._conversation_id = None
@@ -374,7 +372,6 @@ class Orchestrator:
 
     # -- responder callbacks ----------------------------------------------
     def _on_speaking(self, first_chunk: str) -> None:
-        self._spoke_anything = True
         self._set_state(State.SPEAKING)
 
     def _on_token(self, token: str) -> None:
@@ -446,7 +443,13 @@ class Orchestrator:
             self.bus.publish(events.ConversationsChanged(
                 conversation_id=conversation_id, reason="titled"))
 
-    def _report_error(self, message: str, detail: str = "", fatal: bool = False) -> None:
+    def report_error(self, message: str, detail: str = "", fatal: bool = False) -> None:
+        """Surface a failure to the tray and the chat window (F8).
+
+        Public because the transcription thread reports through it: a missing
+        model is exactly the kind of failure the old bare ``except`` turned
+        into silence.
+        """
         self.last_error = message
         log.error("%s (%s)", message, detail)
         self.bus.publish(events.ErrorOccurred(message=message, detail=detail,

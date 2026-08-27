@@ -185,14 +185,14 @@ class Engine:
             try:
                 text = (self.transcriber.transcribe(utterance) or "").strip()
             except TranscriberError as exc:
-                self.orchestrator._report_error(exc.user_message, str(exc),
-                                                fatal=not exc.transient)
+                self.orchestrator.report_error(exc.user_message, str(exc),
+                                               fatal=not exc.transient)
                 if not exc.transient:
                     break
                 continue
             except Exception as exc:  # noqa: BLE001
-                self.orchestrator._report_error("Speech recognition failed.",
-                                                str(exc))
+                self.orchestrator.report_error("Speech recognition failed.",
+                                               str(exc))
                 continue
             if text:
                 self.orchestrator.on_transcript(text)
