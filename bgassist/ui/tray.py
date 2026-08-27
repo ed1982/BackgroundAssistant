@@ -143,6 +143,8 @@ def create_tray(application) -> Tuple[object, object]:
     menu.addAction(quit_action)
 
     tray.setContextMenu(menu)
+    # Clicking a notification opens the window (open question 7).
+    tray.messageClicked.connect(application.show_chat)
     tray.activated.connect(
         lambda reason: application.show_chat()
         if reason == QSystemTrayIcon.ActivationReason.Trigger else None)

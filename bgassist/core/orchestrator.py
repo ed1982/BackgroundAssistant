@@ -78,6 +78,13 @@ class Orchestrator:
         self._conversation_id: Optional[int] = None
         self._user_message_id: Optional[int] = None
         self._spoke_anything = False
+        #: While the chat window's push-to-talk button is held, speech is
+        #: addressed to us by definition and the trigger word is bypassed (D10).
+        self.push_to_talk = False
+        self._ptt_parts: List[str] = []
+        #: Set by the engine so the spotter can raise its threshold while we
+        #: are the ones making noise (§5.4.2, layer 3).
+        self.spotter = None
 
     # -- config helpers ---------------------------------------------------
     def _cfg(self, name: str, default):
@@ -88,6 +95,7 @@ class Orchestrator:
         if self.state is new:
             return
         previous, self.state = self.state, new
+        self._update_spotter_sensitivity(new)
         log.info("state %s -> %s", previous.value, new.value)
         self.bus.publish(events.StateChanged(new.value, previous.value))
         if self.on_state_change is not None:
@@ -130,6 +138,11 @@ class Orchestrator:
         if self.buffer is not None:
             self.buffer.add(wall, text)
         self.bus.publish(events.UtteranceHeard(text=text, ts=wall))
+
+        if self.push_to_talk:
+            # Held button: everything said is the question, no trigger needed.
+            self._ptt_parts.append(text)
+            return
 
         if self.state in (State.THINKING, State.SPEAKING):
             self._maybe_barge_in(text)
@@ -176,6 +189,29 @@ class Orchestrator:
             speak = bool(self._cfg("speak_typed_answers", False))
         self._dispatch("typed", speak=speak, source="typed")
 
+    def begin_push_to_talk(self) -> None:
+        """The push-to-talk button went down (D10)."""
+        if self.responder.busy or self.state in (State.THINKING, State.SPEAKING):
+            self.cancel(reason="superseded")
+        self._ptt_parts = []
+        self.push_to_talk = True
+        self._set_state(State.AWAITING_COMMAND)
+
+    def end_push_to_talk(self) -> None:
+        """The button came up: dispatch whatever was said while it was held."""
+        if not self.push_to_talk:
+            return
+        self.push_to_talk = False
+        text = " ".join(part for part in self._ptt_parts if part).strip()
+        self._ptt_parts = []
+        if not text:
+            self.reset()
+            return
+        self.command_parts = [text]
+        self._match = None
+        self.trigger_ts = self.clock()
+        self._dispatch("push-to-talk", source="push_to_talk")
+
     # -- barge-in ---------------------------------------------------------
     def on_spotter_trigger(self, confidence: float = 1.0) -> None:
         """The acoustic spotter heard the trigger word (§5.3).
@@ -192,6 +228,33 @@ class Orchestrator:
             log.debug("ignoring spotter hit: we are saying the trigger word")
             return
         self.interrupt(source="spotter")
+
+    def _update_spotter_sensitivity(self, state: State) -> None:
+        """Layers 3 and 4 of the barge-in stack (§5.4.2).
+
+        While we are speaking, our own voice comes back attenuated and
+        room-coloured, so the spotter's bar goes up — unless output is going to
+        headphones, in which case there is no acoustic path at all and normal
+        sensitivity is right.
+        """
+        spotter = self.spotter
+        set_speaking = getattr(spotter, "set_speaking", None)
+        if not callable(set_speaking):
+            return
+        speaking = state is State.SPEAKING
+        if speaking:
+            try:
+                from bgassist.audio.capture import output_is_builtin_speaker
+
+                # None (unknown) is treated as "assume there is a path".
+                if output_is_builtin_speaker() is False:
+                    speaking = False
+            except Exception:  # noqa: BLE001 - no audio stack here
+                pass
+        try:
+            set_speaking(speaking)
+        except Exception:  # noqa: BLE001 - the spotter is optional polish
+            log.debug("could not update the spotter sensitivity", exc_info=True)
 
     def _own_voice_contains_trigger(self) -> bool:
         chunk = getattr(self.responder, "current_chunk", "") or ""

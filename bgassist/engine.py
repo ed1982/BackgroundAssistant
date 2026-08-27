@@ -45,6 +45,8 @@ class Engine:
         self.transcriber = transcriber
         self.orchestrator = orchestrator
         self.spotter = spotter
+        # So the orchestrator can raise the spotter's bar while it is speaking.
+        setattr(orchestrator, "spotter", spotter)
         self.poll_timeout = float(poll_timeout)
         self.bus = bus or getattr(orchestrator, "bus", None) or events.EventBus()
 

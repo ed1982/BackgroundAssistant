@@ -113,12 +113,15 @@ class BridgeCore:
     def push_to_talk(self, enable: bool) -> bool:
         """Listen on demand, bypassing the wake word (D10)."""
         if enable:
-            self.app.orchestrator.reset()
             if not self.app.listening:
-                self.app.start_listening()
-            self.app.orchestrator.push_to_talk = True
+                try:
+                    self.app.start_listening()
+                except Exception as exc:  # noqa: BLE001 - no mic, no permission
+                    log.error("push to talk could not start listening: %s", exc)
+                    return False
+            self.app.orchestrator.begin_push_to_talk()
         else:
-            self.app.orchestrator.push_to_talk = False
+            self.app.orchestrator.end_push_to_talk()
         return True
 
     def stop(self) -> bool:

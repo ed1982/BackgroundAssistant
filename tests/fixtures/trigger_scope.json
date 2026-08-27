@@ -1,0 +1,68 @@
+{
+  "_comment": [
+    "The trigger-scope corpus (refactor.md 5.1, decision B).",
+    "Scoping is delegated to the model, so it cannot be asserted mechanically.",
+    "What is asserted here is the thing we control: that the transcript handed",
+    "to the model marks where the name was spoken, keeps the words on BOTH",
+    "sides, and never slices the question up itself. Reviewed by hand; re-run",
+    "when the prompt changes."
+  ],
+  "cases": [
+    {
+      "utterance": "Computer, what is the answer?",
+      "position": "leading",
+      "marked": "«ASSISTANT-NAME-SPOKEN», what is the answer?",
+      "must_keep": ["what is the answer"],
+      "note": "The classic phrasing. Everything after the marker."
+    },
+    {
+      "utterance": "Something has happened, Computer, what is the answer?",
+      "position": "medial",
+      "marked": "Something has happened, «ASSISTANT-NAME-SPOKEN», what is the answer?",
+      "must_keep": ["Something has happened", "what is the answer"],
+      "note": "Both sides survive; the model decides which half is the question."
+    },
+    {
+      "utterance": "Something has happened, what is the answer, Computer?",
+      "position": "trailing",
+      "marked": "Something has happened, what is the answer, «ASSISTANT-NAME-SPOKEN»?",
+      "must_keep": ["what is the answer"],
+      "note": "The phrasing the old split_command() turned into an empty query."
+    },
+    {
+      "utterance": "how long does the warp core take to cool, computer",
+      "position": "trailing",
+      "marked": "how long does the warp core take to cool, «ASSISTANT-NAME-SPOKEN»",
+      "must_keep": ["how long does the warp core take to cool"],
+      "note": "No question mark; the classifier must not depend on punctuation."
+    },
+    {
+      "utterance": "computer",
+      "position": "leading",
+      "marked": "«ASSISTANT-NAME-SPOKEN»",
+      "must_keep": [],
+      "note": "A bare call for attention: wait for the question rather than dispatching."
+    },
+    {
+      "utterance": "so, computer, remind me what he said about the deflector",
+      "position": "leading",
+      "marked": "so, «ASSISTANT-NAME-SPOKEN», remind me what he said about the deflector",
+      "must_keep": ["remind me what he said about the deflector"],
+      "note": "\"so\" is filler, so this is still being addressed."
+    },
+    {
+      "utterance": "tell me the time, computer, please",
+      "position": "trailing",
+      "marked": "tell me the time, «ASSISTANT-NAME-SPOKEN», please",
+      "must_keep": ["tell me the time"],
+      "note": "Trailing politeness is not a command."
+    }
+  ],
+  "must_not_wake": [
+    "my computer is broken and he laughed about it",
+    "I told him my computer is broken",
+    "the computer says no",
+    "this computer needs more memory",
+    "computers are getting cheaper"
+  ]
+}

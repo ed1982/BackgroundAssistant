@@ -148,3 +148,74 @@ def test_empty_transcript_ignored():
     p.tick()
     assert p.state is State.IDLE
     assert len(p.buffer) == 0
+
+
+# -- push to talk (D10) ---------------------------------------------------
+
+def test_push_to_talk_bypasses_the_trigger_word():
+    clock = FakeClock()
+    llm = RecordingLlm(response="ok")
+    p = make_orchestrator(clock=clock, llm=llm)
+    p.begin_push_to_talk()
+    p.on_transcript("what is the time in tokyo")
+    p.on_transcript("and in berlin")
+    p.end_push_to_talk()
+    assert len(llm.calls) == 1
+    assert llm.calls[0][1] == "what is the time in tokyo and in berlin"
+
+
+def test_releasing_push_to_talk_with_nothing_said_does_nothing():
+    p = make_orchestrator(llm=RecordingLlm())
+    p.begin_push_to_talk()
+    p.end_push_to_talk()
+    assert p.llm.calls == []
+    assert p.state is State.IDLE
+
+
+def test_push_to_talk_speech_still_reaches_the_ambient_buffer():
+    p = make_orchestrator(llm=RecordingLlm())
+    p.begin_push_to_talk()
+    p.on_transcript("a held question")
+    assert "a held question" in p.buffer.recent_text()
+    p.end_push_to_talk()
+
+
+# -- F8: transcription failures are surfaced, not swallowed ---------------
+
+def test_a_transient_transcription_failure_is_reported_and_listening_continues():
+    from bgassist.core import events
+    from bgassist.stt.base import TranscriptionFailed
+
+    from tests.fakes import RaisingTranscriber
+
+    bus = events.RecordingBus()
+    p = make_orchestrator(bus=bus)
+    p.transcriber = RaisingTranscriber(TranscriptionFailed("bad frame"))
+    p.feed_utterance(b"x")
+    errors = bus.of(events.ErrorOccurred)
+    assert errors and errors[0].fatal is False
+    assert p.state is State.IDLE
+
+
+def test_a_missing_model_is_reported_as_something_to_act_on():
+    from bgassist.core import events
+    from bgassist.stt.base import ModelUnavailable
+
+    from tests.fakes import RaisingTranscriber
+
+    bus = events.RecordingBus()
+    p = make_orchestrator(bus=bus)
+    p.transcriber = RaisingTranscriber(ModelUnavailable("model gone"))
+    p.feed_utterance(b"x")
+    error = bus.of(events.ErrorOccurred)[0]
+    assert error.fatal is True
+    assert "Preferences" in error.message
+
+
+def test_an_unexpected_transcriber_error_is_still_not_fatal():
+    from tests.fakes import RaisingTranscriber
+
+    p = make_orchestrator()
+    p.transcriber = RaisingTranscriber(RuntimeError("something odd"))
+    p.feed_utterance(b"x")   # must not raise
+    assert p.state is State.IDLE
