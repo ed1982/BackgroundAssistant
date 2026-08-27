@@ -142,10 +142,22 @@ def _probe(host: str, port: int, path: str, timeout: float) -> Optional[List[str
 
 def detect_local_servers(host: str = "127.0.0.1", timeout: float = 0.6,
                          ports=KNOWN_PORTS) -> List[LocalServer]:
-    """Probe the usual local-server ports and report what is actually there."""
+    """Probe the usual local-server ports and report what is actually there.
+
+    The ports are probed concurrently: six sequential connection timeouts is
+    four seconds of a frozen Preferences window, and all six at once is one.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    entries = list(ports)
+    if not entries:
+        return []
+    with ThreadPoolExecutor(max_workers=len(entries)) as pool:
+        results = list(pool.map(
+            lambda entry: _probe(host, entry[0], entry[2], timeout), entries))
+
     found: List[LocalServer] = []
-    for port, label, path, kind in ports:
-        models = _probe(host, port, path, timeout)
+    for (port, label, path, kind), models in zip(entries, results, strict=False):
         if models is None:
             continue
         found.append(LocalServer(

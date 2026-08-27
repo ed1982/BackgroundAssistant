@@ -107,6 +107,7 @@ class ConversationStore:
         self.cipher = cipher or NullCipher()
         self.continuation_seconds = float(continuation_seconds)
         self._lock = threading.RLock()
+        self._closed = False
         self._conn = sqlite3.connect(str(self.path), check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         with self._lock:
@@ -121,10 +122,28 @@ class ConversationStore:
     # -- helpers ---------------------------------------------------------
     def close(self) -> None:
         with self._lock:
+            self._closed = True
             try:
                 self._conn.close()
             except Exception:  # noqa: BLE001
                 pass
+
+    @property
+    def closed(self) -> bool:
+        return self._closed
+
+    def _usable(self) -> bool:
+        """False once the store is closed.
+
+        Background work outlives the store by design — auto-titling is a second
+        model call that runs after the answer, and quitting mid-flight is
+        normal. Writing to a closed connection is not an error worth raising in
+        a daemon thread; it is simply too late to matter.
+        """
+        if self._closed:
+            log.debug("ignoring a request on a closed conversation store")
+            return False
+        return True
 
     def _decrypt(self, blob) -> str:
         if blob is None:
@@ -145,6 +164,8 @@ class ConversationStore:
 
     # -- conversations ---------------------------------------------------
     def create_conversation(self, now: Optional[float] = None, title: str = "") -> int:
+        if not self._usable():
+            return -1
         now = time.time() if now is None else now
         with self._lock:
             cur = self._conn.execute(
@@ -156,6 +177,8 @@ class ConversationStore:
     def current_conversation(self, now: Optional[float] = None,
                              create: bool = True) -> Optional[int]:
         """The conversation a new voice exchange belongs to (the 10-minute rule)."""
+        if not self._usable():
+            return None
         now = time.time() if now is None else now
         with self._lock:
             row = self._conn.execute(
@@ -166,6 +189,8 @@ class ConversationStore:
         return self.create_conversation(now) if create else None
 
     def touch(self, conversation_id: int, now: Optional[float] = None) -> None:
+        if not self._usable():
+            return
         now = time.time() if now is None else now
         with self._lock:
             self._conn.execute(
@@ -174,12 +199,16 @@ class ConversationStore:
             self._conn.commit()
 
     def set_title(self, conversation_id: int, title: str) -> None:
+        if not self._usable():
+            return
         with self._lock:
             self._conn.execute("UPDATE conversations SET title = ? WHERE id = ?",
                                (title.strip()[:120], conversation_id))
             self._conn.commit()
 
     def get_conversation(self, conversation_id: int) -> Optional[Conversation]:
+        if not self._usable():
+            return None
         with self._lock:
             row = self._conn.execute(
                 "SELECT * FROM conversations WHERE id = ?",
@@ -189,6 +218,8 @@ class ConversationStore:
             updated_ts=row["updated_ts"], title=row["title"])
 
     def list_conversations(self, limit: int = 100) -> List[Conversation]:
+        if not self._usable():
+            return []
         with self._lock:
             rows = self._conn.execute(
                 "SELECT * FROM conversations ORDER BY updated_ts DESC LIMIT ?",
@@ -198,6 +229,8 @@ class ConversationStore:
                 for r in rows]
 
     def delete_conversation(self, conversation_id: int) -> None:
+        if not self._usable():
+            return
         with self._lock:
             self._conn.execute("DELETE FROM messages WHERE conversation_id = ?",
                                (conversation_id,))
@@ -206,6 +239,8 @@ class ConversationStore:
             self._conn.commit()
 
     def delete_all(self) -> None:
+        if not self._usable():
+            return
         with self._lock:
             self._conn.execute("DELETE FROM messages")
             self._conn.execute("DELETE FROM conversations")
@@ -213,6 +248,8 @@ class ConversationStore:
 
     def purge_older_than(self, days: float, now: Optional[float] = None) -> int:
         """Optional auto-delete (Preferences → Privacy). Off by default."""
+        if not self._usable():
+            return 0
         now = time.time() if now is None else now
         cutoff = now - days * 86400.0
         with self._lock:
@@ -234,6 +271,11 @@ class ConversationStore:
                     spoken_upto: Optional[int] = None, interrupted: bool = False,
                     superseded: bool = False, source: str = "voice") -> Message:
         ts = time.time() if ts is None else ts
+        if not self._usable():
+            return Message(id=-1, conversation_id=conversation_id, role=role,
+                           ts=ts, text=text or "", context=context or "",
+                           spoken_upto=spoken_upto, interrupted=interrupted,
+                           superseded=superseded, source=source)
         body = self.cipher.encrypt(text or "")
         context_blob = self.cipher.encrypt(context or "") if context else None
         with self._lock:
@@ -257,6 +299,8 @@ class ConversationStore:
                        spoken_upto: Optional[int] = None,
                        interrupted: Optional[bool] = None,
                        superseded: Optional[bool] = None) -> None:
+        if not self._usable():
+            return
         sets, values = [], []
         if text is not None:
             sets.append("body = ?")
@@ -279,6 +323,8 @@ class ConversationStore:
             self._conn.commit()
 
     def messages(self, conversation_id: int, limit: int = 200) -> List[Message]:
+        if not self._usable():
+            return []
         with self._lock:
             rows = self._conn.execute(
                 "SELECT * FROM messages WHERE conversation_id = ? "
@@ -334,6 +380,8 @@ class ConversationStore:
         return "\n".join(lines)
 
     def count(self) -> dict:
+        if not self._usable():
+            return {"conversations": 0, "messages": 0}
         with self._lock:
             conversations = self._conn.execute(
                 "SELECT COUNT(*) AS n FROM conversations").fetchone()["n"]

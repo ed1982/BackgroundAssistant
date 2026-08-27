@@ -130,13 +130,20 @@ class BridgeCore:
 
     def speak_again(self, conversation_id: int, message_id: int) -> bool:
         for message in self.app.conversations.messages(conversation_id):
-            if message.id == message_id:
-                try:
-                    self.app.tts.speak(message.spoken_text)
-                except Exception as exc:  # noqa: BLE001
-                    log.error("speak again failed: %s", exc)
-                return True
+            if message.id != message_id:
+                continue
+            text = message.spoken_text
+            # Speech takes as long as the answer; on the GUI thread that is a
+            # frozen window for the duration.
+            _in_background("speak-again", self._speak, text)
+            return True
         return False
+
+    def _speak(self, text: str) -> None:
+        try:
+            self.app.tts.speak(text)
+        except Exception as exc:  # noqa: BLE001 - speaking is never critical
+            log.error("speak again failed: %s", exc)
 
     # -- settings ---------------------------------------------------------
     def get_settings(self) -> Dict[str, Any]:
@@ -187,10 +194,16 @@ class BridgeCore:
         self.app.secrets.delete(account)
         return True
 
+    #: A connection test must fail fast; the configured 120 s answer timeout
+    #: would otherwise be two minutes of a window that looks hung.
+    TEST_TIMEOUT_S = 20.0
+
     def test_connection(self) -> Dict[str, Any]:
         """One tiny request, reporting what actually happened (§6.5)."""
         try:
             llm = self.app.build_llm()
+            llm.timeout_s = min(getattr(llm, "timeout_s", self.TEST_TIMEOUT_S),
+                                self.TEST_TIMEOUT_S)
             result = llm.test_connection()
             result["ok"] = True
             return result
@@ -218,6 +231,10 @@ class BridgeCore:
         return DEFAULT_SYSTEM_PROMPT
 
     def preview_voice(self, voice: Optional[str] = None) -> bool:
+        _in_background("voice-preview", self._preview_voice, voice)
+        return True
+
+    def _preview_voice(self, voice: Optional[str]) -> None:
         try:
             from bgassist.tts import make_tts
 
@@ -226,10 +243,8 @@ class BridgeCore:
                 "engine": settings.engine, "rate": settings.rate,
                 "voice": voice or settings.voice})())
             engine.speak("All systems are operating within normal parameters.")
-            return True
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001 - a preview is never critical
             log.error("voice preview failed: %s", exc)
-            return False
 
     # -- privacy ----------------------------------------------------------
     def delete_all_conversations(self) -> bool:
@@ -273,6 +288,14 @@ class BridgeCore:
 
 
 # -- helpers --------------------------------------------------------------
+
+def _in_background(name: str, target, *args) -> None:
+    """Run *target* off the GUI thread. Anything that speaks or waits on a
+    network belongs here: a blocked Qt thread is a frozen window."""
+    import threading
+
+    threading.Thread(target=target, args=args, name=f"bgassist-{name}",
+                     daemon=True).start()
 
 def _relative(ts: float, now: Optional[float] = None) -> str:
     now = time.time() if now is None else now
@@ -345,6 +368,10 @@ def make_web_bridge(application):
         conversationsChanged = Signal(str)
         errorOccurred = Signal(str)
         utteranceHeard = Signal(str)
+        # Results of the two operations that touch the network. They run off
+        # the GUI thread and answer through these rather than by returning.
+        connectionTested = Signal(str)
+        serversDetected = Signal(str)
 
         def __init__(self) -> None:
             super().__init__()
@@ -430,13 +457,15 @@ def make_web_bridge(application):
         def clearApiKey(self, provider: str) -> bool:
             return core.clear_api_key(provider)
 
-        @Slot(result=str)
-        def testConnection(self) -> str:
-            return json.dumps(core.test_connection())
+        @Slot()
+        def testConnection(self) -> None:
+            _in_background("test-connection", lambda: self.connectionTested.emit(
+                json.dumps(core.test_connection())))
 
-        @Slot(result=str)
-        def detectServers(self) -> str:
-            return json.dumps(core.detect_servers())
+        @Slot()
+        def detectServers(self) -> None:
+            _in_background("detect-servers", lambda: self.serversDetected.emit(
+                json.dumps(core.detect_servers())))
 
         @Slot(result=str)
         def listModels(self) -> str:

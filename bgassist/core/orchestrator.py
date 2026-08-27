@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import enum
 import logging
+import threading
 import time
 from typing import Callable, List, Optional
 
@@ -82,6 +83,7 @@ class Orchestrator:
         #: addressed to us by definition and the trigger word is bypassed (D10).
         self.push_to_talk = False
         self._ptt_parts: List[str] = []
+        self._interrupting = False
         #: Set by the engine so the spotter can raise its threshold while we
         #: are the ones making noise (§5.4.2, layer 3).
         self.spotter = None
@@ -276,11 +278,20 @@ class Orchestrator:
         """Cut the answer off now and treat it as a conversational turn (D12a)."""
         if self.state not in (State.THINKING, State.SPEAKING):
             return
-        log.info("interrupted by %s", source)
-        self.bus.publish(events.TriggerSpotted(source=source))
-        self.responder.cancel()
-        recovered = self._recover_leading_words()
-        follow_up = text or recovered
+        if self._interrupting:
+            # The recovered words are fed back through on_transcript, which can
+            # route straight back here if the responder has not finished
+            # winding down. One interruption is one interruption.
+            return
+        self._interrupting = True
+        try:
+            log.info("interrupted by %s", source)
+            self.bus.publish(events.TriggerSpotted(source=source))
+            self.responder.cancel()
+            recovered = self._recover_leading_words()
+            follow_up = text or recovered
+        finally:
+            self._interrupting = False
         if follow_up:
             # The interruption carries its own question: run it as a new turn.
             self.on_transcript(follow_up)
@@ -384,7 +395,7 @@ class Orchestrator:
                     self._conversation_id, "assistant", result.text,
                     spoken_upto=result.spoken_upto, interrupted=result.interrupted)
                 message_id = stored.id
-                self._maybe_title(self._conversation_id)
+                self._title_later(self._conversation_id)
 
         if result.error:
             self.last_error = result.error
@@ -401,6 +412,14 @@ class Orchestrator:
 
         if self.state in (State.THINKING, State.SPEAKING):
             self.reset()
+
+    def _title_later(self, conversation_id: int) -> None:
+        """Title in the background: a second model call must not hold the
+        state machine in SPEAKING after the speaking has stopped."""
+        if not self._cfg("auto_title", True) or self.conversations is None:
+            return
+        threading.Thread(target=self._maybe_title, args=(conversation_id,),
+                         name="bgassist-title", daemon=True).start()
 
     def _maybe_title(self, conversation_id: int) -> None:
         """Auto-title a conversation after its first exchange (D15)."""

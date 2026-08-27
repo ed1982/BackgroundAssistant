@@ -149,7 +149,8 @@ def test_the_pages_call_only_methods_the_bridge_has():
     for page in ("chat.js", "prefs.js"):
         for call in set(re.findall(r"backend\.(\w+)\(", _read(page))):
             if call in ("stateChanged", "tokenStreamed", "answerFinished",
-                        "conversationsChanged", "errorOccurred", "utteranceHeard"):
+                        "conversationsChanged", "errorOccurred", "utteranceHeard",
+                        "connectionTested", "serversDetected"):
                 continue
             assert call in camel, f"{page} calls backend.{call}()"
 

@@ -60,6 +60,11 @@ class _SseHandler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
 
+    def handle_error(self, *args):
+        # Cancelling a stream closes the socket mid-response, which is the
+        # point of the test; the server need not complain about it.
+        pass
+
 
 @pytest.fixture()
 def sse_server():

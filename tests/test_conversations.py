@@ -178,3 +178,19 @@ def test_without_a_keychain_the_key_survives_a_restart(tmp_path, monkeypatch):
     assert second.decrypt(blob) == "a private thing"
     assert first.key_location == "file"
     assert oct((tmp_path / "dbkey").stat().st_mode)[-3:] == "600"
+
+
+def test_a_closed_store_ignores_late_work_instead_of_raising(tmp_path):
+    """Auto-titling is a second model call that runs after the answer, so it
+    can still be in flight when the app quits. Writing to a closed store is
+    too late to matter — it must not raise in a daemon thread."""
+    store = ConversationStore(tmp_path / "c.db", NullCipher())
+    conversation = store.create_conversation()
+    store.add_message(conversation, "user", "hello")
+    store.close()
+    assert store.closed is True
+    store.set_title(conversation, "late title")     # must not raise
+    store.add_message(conversation, "assistant", "late")
+    assert store.messages(conversation) == []
+    assert store.list_conversations() == []
+    assert store.count() == {"conversations": 0, "messages": 0}

@@ -162,27 +162,31 @@
       });
     });
 
+    // The connection test and server detection run off the GUI thread and
+    // answer through a signal, so the window stays responsive while they wait.
+    backend.connectionTested.connect(function (json) {
+      var result = $("connection-result");
+      var data = JSON.parse(json);
+      if (data.ok) {
+        result.className = "result ok";
+        result.textContent = "Connected to " + data.model + " in " +
+          data.latency_ms + " ms — it replied “" + (data.reply || "") + "”.";
+      } else {
+        result.className = "result error";
+        result.textContent = data.error;
+      }
+    });
+
     $("test-connection").addEventListener("click", function () {
       var result = $("connection-result");
       result.className = "result";
       result.textContent = "Testing…";
-      backend.testConnection(function (json) {
-        var data = JSON.parse(json);
-        if (data.ok) {
-          result.className = "result ok";
-          result.textContent = "Connected to " + data.model + " in " +
-            data.latency_ms + " ms — it replied “" + (data.reply || "") + "”.";
-        } else {
-          result.className = "result error";
-          result.textContent = data.error;
-        }
-      });
+      backend.testConnection();
     });
 
-    $("detect-servers").addEventListener("click", function () {
+    backend.serversDetected.connect(function (json) {
       var container = $("servers");
-      container.textContent = "Looking on localhost…";
-      backend.detectServers(function (json) {
+      {
         var servers = JSON.parse(json);
         container.innerHTML = "";
         if (!servers.length) {
@@ -215,7 +219,12 @@
           node.appendChild(use);
           container.appendChild(node);
         });
-      });
+      }
+    });
+
+    $("detect-servers").addEventListener("click", function () {
+      $("servers").textContent = "Looking on localhost…";
+      backend.detectServers();
     });
 
     $("refresh-models").addEventListener("click", function () {
