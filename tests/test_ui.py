@@ -206,6 +206,7 @@ def test_the_states_differ_from_each_other():
 def test_the_icon_ladder_and_ico_are_written(tmp_path):
     written = icons.write_app_icons(tmp_path)
     assert (tmp_path / "icon.iconset").is_dir()
-    assert any(p.name == "icon_1024x1024.png" for p in written)
+    assert any(p.name == "icon-1024.png" for p in written)
+    assert any(p.name == "icon_512x512@2x.png" for p in written)
     ico = icons.write_ico(tmp_path / "icon.ico")
     assert ico.read_bytes()[:4] == b"\x00\x00\x01\x00"

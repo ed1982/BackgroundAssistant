@@ -163,6 +163,7 @@ def run_check() -> int:
 
     from bgassist.app import Application
     from bgassist.llm.mock import MockBackend
+    from bgassist.settings.secrets import MemorySecretStore
     from bgassist.storage import ConversationStore, NullCipher
     from bgassist.stt.mock import MockTranscriber
     from bgassist.tts.mock import MockTts
@@ -185,6 +186,7 @@ def run_check() -> int:
         conversations = ConversationStore(Path(tmp) / "c.db", NullCipher())
         application = Application(
             settings_store=store, conversations=conversations,
+            secrets=MemorySecretStore(),
             llm=MockBackend(response="All systems nominal."), tts=MockTts(),
             transcriber=MockTranscriber(), start_engine=False)
         orchestrator = application.orchestrator
@@ -302,21 +304,36 @@ def run_doctor() -> int:
 # -- smoke ----------------------------------------------------------------
 
 def run_smoke() -> int:
-    """Build the tray UI without touching the microphone, then quit."""
-    from PySide6.QtCore import QTimer
+    """Build the tray UI without touching the microphone, then quit.
 
-    from bgassist.app import Application
-    from bgassist.llm.mock import MockBackend
-    from bgassist.stt.mock import MockTranscriber
-    from bgassist.tts.mock import MockTts
-    from bgassist.ui.tray import create_tray
+    Runs against a throwaway data directory and an in-memory secret store: a
+    smoke test must not write into the user's real settings, and an ad-hoc
+    signed binary reaching for a keychain item would put up a modal prompt and
+    hang the build that is running it.
+    """
+    import os
+    import tempfile
 
-    application = Application(llm=MockBackend(), tts=MockTts(),
-                              transcriber=MockTranscriber(), start_engine=False)
-    qt_app, _tray = create_tray(application)
-    QTimer.singleShot(800, qt_app.quit)
-    rc = qt_app.exec()
-    application.shutdown()
+    with tempfile.TemporaryDirectory(prefix="bgassist-smoke-") as tmp:
+        os.environ["BGASSIST_HOME"] = tmp
+
+        from PySide6.QtCore import QTimer
+
+        from bgassist.app import Application
+        from bgassist.llm.mock import MockBackend
+        from bgassist.settings.secrets import MemorySecretStore
+        from bgassist.stt.mock import MockTranscriber
+        from bgassist.tts.mock import MockTts
+        from bgassist.ui.tray import create_tray
+
+        application = Application(secrets=MemorySecretStore(),
+                                  llm=MockBackend(), tts=MockTts(),
+                                  transcriber=MockTranscriber(),
+                                  start_engine=False)
+        qt_app, _tray = create_tray(application)
+        QTimer.singleShot(800, qt_app.quit)
+        rc = qt_app.exec()
+        application.shutdown()
     print("smoke ok: the tray was built and the event loop ran")
     return rc
 

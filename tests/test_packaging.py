@@ -124,6 +124,11 @@ def test_the_icon_generator_runs(tmp_path):
         capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     assert (tmp_path / "icon.iconset" / "icon_512x512.png").exists()
+    # iconutil refuses a set containing anything it does not recognise.
+    from bgassist.ui.icons import ICONSET
+
+    assert {p.name for p in (tmp_path / "icon.iconset").glob("*")} == \
+        {name for name, _size in ICONSET}
     assert (tmp_path / "icon.ico").exists()
     assert (tmp_path / "tray" / "idle.png").exists()
 
@@ -134,3 +139,19 @@ def test_the_project_metadata_declares_the_optional_extras():
         assert re.search(rf"^{extra} = ", pyproject, re.M), extra
     for dependency in ("keyring", "cryptography", "platformdirs", "PySide6"):
         assert dependency in pyproject, dependency
+
+
+def test_the_smoke_and_check_modes_never_reach_the_real_keychain():
+    """An ad-hoc signed binary asking for a keychain item puts up a modal
+    prompt, which would hang the build that is running it — and neither mode
+    should be writing to the user's real keychain anyway."""
+    source = (ROOT / "bgassist" / "cli.py").read_text()
+    for mode in ("def run_check", "def run_smoke"):
+        body = source.split(mode, 1)[1].split("\ndef ", 1)[0]
+        assert "MemorySecretStore()" in body, mode
+
+
+def test_the_smoke_mode_uses_a_throwaway_data_directory():
+    source = (ROOT / "bgassist" / "cli.py").read_text()
+    body = source.split("def run_smoke", 1)[1].split("\ndef ", 1)[0]
+    assert "BGASSIST_HOME" in body

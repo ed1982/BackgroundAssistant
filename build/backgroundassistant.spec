@@ -27,7 +27,8 @@ hiddenimports = ["keyring.backends.macOS", "keyring.backends.Windows",
 
 # The speech stack ships model files and native libraries that PyInstaller
 # cannot find by following imports alone.
-for package in ("faster_whisper", "ctranslate2", "sounddevice", "webrtcvad"):
+for package in ("faster_whisper", "ctranslate2", "sounddevice", "webrtcvad",
+                "onnxruntime", "tokenizers", "av", "huggingface_hub"):
     try:
         package_datas, package_binaries, package_hidden = collect_all(package)
         datas += package_datas

@@ -178,8 +178,21 @@ def render(size: int = 64, state: str = "idle", template: bool = False,
 
 # -- files ----------------------------------------------------------------
 
-#: The macOS .icns ladder.
-ICNS_SIZES = (16, 32, 64, 128, 256, 512, 1024)
+#: The macOS .icns ladder, as ``iconutil`` insists on seeing it: the exact
+#: ten filenames it recognises, and nothing else in the folder.
+ICONSET = (
+    ("icon_16x16.png", 16),
+    ("icon_16x16@2x.png", 32),
+    ("icon_32x32.png", 32),
+    ("icon_32x32@2x.png", 64),
+    ("icon_128x128.png", 128),
+    ("icon_128x128@2x.png", 256),
+    ("icon_256x256.png", 256),
+    ("icon_256x256@2x.png", 512),
+    ("icon_512x512.png", 512),
+    ("icon_512x512@2x.png", 1024),
+)
+ICNS_SIZES = tuple(sorted({size for _name, size in ICONSET}))
 #: The Windows .ico ladder.
 ICO_SIZES = (16, 24, 32, 48, 64, 128, 256)
 
@@ -188,17 +201,18 @@ def write_app_icons(directory: Path) -> List[Path]:
     """The app icon ladder (iconset layout, ready for ``iconutil``)."""
     iconset = Path(directory) / "icon.iconset"
     iconset.mkdir(parents=True, exist_ok=True)
+    # Anything unexpected in here makes iconutil refuse the whole set, so a
+    # stale file from an older ladder would break the build.
+    for stale in iconset.glob("*.png"):
+        stale.unlink()
+
     written: List[Path] = []
     cache: Dict[int, bytes] = {}
-    for size in ICNS_SIZES:
+    for name, size in ICONSET:
         data = cache.setdefault(size, render(size, "idle"))
-        for scale, name in ((1, f"icon_{size}x{size}.png"),
-                            (2, f"icon_{size // 2}x{size // 2}@2x.png")):
-            if scale == 2 and size < 32:
-                continue
-            path = iconset / name
-            path.write_bytes(data)
-            written.append(path)
+        path = iconset / name
+        path.write_bytes(data)
+        written.append(path)
     master = Path(directory) / "icon-1024.png"
     master.write_bytes(cache[1024])
     written.append(master)

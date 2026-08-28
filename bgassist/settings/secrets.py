@@ -105,6 +105,24 @@ class SecretStore:
         return [a for a in accounts if self.has(a)]
 
 
+class MemorySecretStore(SecretStore):
+    """A secret store that never reaches the keychain.
+
+    Used by ``--check`` and ``--smoke``: on macOS an unsigned or ad-hoc signed
+    binary asking for a keychain item puts up a modal prompt, which would hang
+    an unattended build — and neither mode should be writing to the user's real
+    keychain in the first place.
+    """
+
+    def __init__(self, service: str = SERVICE):
+        super().__init__(service=service, backend=None)
+        self._backend_ok = False
+
+    @property
+    def available(self) -> bool:
+        return False
+
+
 def display_stub(secret: str) -> str:
     """What the UI is allowed to see: ``sk-…4f2a``, never the key itself."""
     secret = secret or ""
