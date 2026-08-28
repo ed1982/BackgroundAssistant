@@ -1,226 +1,142 @@
-# BackgroundAssistant — Deep Refactoring Plan
+# BackgroundAssistant — design and rationale
 
-**Status:** **implemented, 2026-08-27.** Everything that can be built and tested without a
-Mac in the loop is done and committed; see §16 for the record, the deviations, and the short
-list of steps that can only happen on the machine itself.
-**Supersedes:** `plan.md` (the original design document, which describes the version this
-replaced).
-**Date:** 2026-08-27
+**What this is:** the reasoning behind the way the app is built. It was written
+as a plan, and it was implemented; it is kept because the *why* of a decision is
+the part that cannot be recovered from the code, and because a dozen source
+files point at its section numbers.
+
+**How to read it.** §3 is the decisions and §4–§8 are the design. §2 explains
+the numbered findings (F1…F18) that source comments refer to. §16 is what
+actually happened when it was built, including the things that only appeared on
+real hardware. The section numbers are not contiguous — the project-management
+scaffolding has been deleted, and the surviving numbers are left where they were
+because forty source comments point at them.
+
+**Status:** implemented and shipping. macOS builds a signed-ad-hoc `.app` and a
+DMG; Windows is written but has never been run. Date of the plan: 2026-08-27.
 
 ---
 
-## 0. TL;DR
+## 0. In one paragraph
 
-The engine underneath this app is good. The core is a genuinely well-factored, well-tested
-state machine — 54 tests, clean dependency injection, sensible separation of pure logic from
-I/O. **None of that is being thrown away.**
+The engine underneath this app was always good — a well-factored, well-tested
+state machine with clean dependency injection. What was wrong was everything
+around it: it crashed on quit, it could not be given an API key without editing
+a shell profile, it wrote every private conversation to a plaintext file, and it
+had no settings, no window, no icon, no installer and no version control. It was
+an engine without a car. This is the car.
 
-What is wrong is everything *around* the engine: it crashes on quit, it can't be given an API
-key without editing a shell profile, it writes every private conversation you have to a
-plaintext file, it has no settings UI, no window, no icon, no installer, and no version
-control. It is an engine without a car.
-
-This plan rebuilds the car.
-
-| | Today | After |
+| | Before | Now |
 |---|---|---|
 | Install | clone, venv, pip, edit JSON, edit `~/.zshrc` | drag `BackgroundAssistant.app` to Applications |
-| API key | `export OPENAI_API_KEY` in a shell you don't control | Preferences → Keychain |
+| API key | `export OPENAI_API_KEY` in a shell the app never sees | Preferences → Keychain |
 | Provider | edit `config.json`, restart | dropdown, with "Test connection" |
-| Settings | hand-edited JSON | Preferences window |
-| Responses | spoken, then gone | spoken + a real chat window with searchable history |
-| Follow-ups | impossible — every question is one-shot | full multi-turn, by voice or typing |
-| Quit | raises `TypeError` | works |
-| Your speech | written to `starcop.log` forever | never touches the disk unless you asked a question |
-| Version control | none | git + public GitHub repo |
+| Responses | spoken, then gone | spoken, plus a searchable chat window |
+| Follow-ups | impossible — every question was one-shot | full multi-turn, by voice or typing |
+| Quit | raised `TypeError` | works |
+| Your speech | written to `starcop.log` for ever | never touches the disk unless you asked a question |
+| Version control | none | git, and a public repo |
 
 ---
 
-## 1. What exists today (verified by reading every file)
+## 1. What this replaced
 
-### 1.1 Module map
+A single-package app (`starcop`) of about 2,000 lines: audio capture, a VAD
+segmenter, faster-whisper, a wake-word regex, a four-state pipeline, two LLM
+backends, two TTS engines and a four-item tray menu, driven by **one worker
+thread** that did all of it in sequence. 54 tests, all passing.
 
-```
-main.py                  CLI entry: --selftest / --smoke / --list-devices / --config
-starcop/
-  __init__.py            version string
-  config.py       162 L  dataclass config, defaults, deep-merge, ${ENV} expansion
-  audio.py         79 L  sounddevice InputStream → queue of 30 ms int16 frames
-  vad.py           39 L  webrtcvad wrapper
-  segmenter.py     94 L  VAD endpointing state machine → complete utterances
-  transcriber.py   52 L  faster-whisper, lazy model load
-  transcript.py    57 L  rolling (timestamp, text) buffer, pruned by age + chars
-  wakeword.py      60 L  word-boundary regex matcher, split_command()
-  pipeline.py     140 L  IDLE → AWAITING_COMMAND → THINKING → SPEAKING state machine
-  llm.py          161 L  Ollama + OpenAI-compatible + Mock backends over urllib
-  tts.py          154 L  macOS `say`, pyttsx3, Mock
-  runner.py        49 L  the single worker thread that drives everything
-  app.py          115 L  PySide6 tray icon + 4-item menu
-tests/           ~54 tests, all passing
-```
+Three things about it were right and were kept:
 
-### 1.2 How it actually runs
+- **The pure-logic core.** The segmenter, the trigger matching, the transcript
+  buffer and the state machine had no I/O in them and took everything by
+  injection, including the clock. That is why the tests were fast and
+  deterministic, and it is why this rebuild was tractable at all.
+- **Lazy heavy imports.** `faster_whisper`, `sounddevice` and `PySide6` are
+  imported inside functions, so the suite runs in seconds without them.
+- **The failure philosophy.** Every layer caught its own exceptions and kept
+  listening. An LLM 401 does not stop the microphone. That is correct for an
+  always-on daemon and it survived intact.
 
-One `Runner` thread pulls 30 ms frames off a `queue.Queue`, feeds them to the VAD segmenter,
-and when an utterance completes it calls `pipeline.feed_utterance()` — which **synchronously**
-runs Whisper, then (if triggered) **synchronously** calls the LLM, then **synchronously**
-blocks on TTS. Meanwhile the PortAudio callback keeps pushing frames onto an unbounded queue.
-During `THINKING` and `SPEAKING` the worker drains and discards frames so the assistant never
-hears itself.
-
-### 1.3 What is genuinely good and must be preserved
-
-- **The pure-logic core.** `segmenter.py`, `pipeline.py`, `wakeword.py`, `transcript.py` and
-  `config.py` have zero hard dependencies on audio, models or network. Everything is injected.
-  This is why there are 54 fast tests and why this refactor is tractable at all.
-- **The injectable clock.** `Pipeline` takes `clock: Callable[[], float]`. Time-dependent
-  behaviour is tested deterministically. Keep this pattern everywhere new.
-- **Lazy heavy imports.** `faster_whisper`, `sounddevice`, `PySide6` are all imported inside
-  functions, so the test suite runs in under a second and `--smoke` works without a mic.
-- **The failure philosophy.** Every layer catches its own exceptions and keeps listening. An
-  LLM 401 does not stop the microphone. This is correct for an always-on daemon and should
-  survive the refactor intact.
-- **The self-test harness.** `--selftest file.wav` runs real audio through the real chain with
-  mock LLM/TTS. This is the single most useful debugging tool in the repo. Extend it, don't
-  drop it.
+Everything else — the packaging, the settings, the privacy story, the
+concurrency — is new. The rest of this document is why.
 
 ---
 
-## 2. Findings — what is actually broken
+## 2. The findings
 
-Each item below was verified against the source and, where noted, against `starcop.log`.
+Source comments refer to these by number. Each was verified against the code
+and, where noted, against a real `starcop.log`.
 
-### 2.1 Critical
+**Critical**
 
-**F1 — `Runner` shadows a private `Thread` attribute; Stop and Quit both crash.**
-`starcop/runner.py:23` sets `self._stop = threading.Event()`. `threading.Thread` already
-defines `_stop` as a *method*, called internally by `Thread._wait_for_tstate_lock()` during
-`join()`. Every `stop()` therefore raises:
+- **F1 — Stop and Quit both crashed.** `Runner` subclassed `threading.Thread`
+  and set `self._stop = threading.Event()`, shadowing `Thread._stop`, which the
+  interpreter calls internally during `join()`. Every stop raised
+  `TypeError: 'Event' object is not callable` — five times in the log. The mic
+  stream and worker were left running and the user force-quit. *Fixed: the
+  engine holds its threads rather than being one, and the attribute is
+  `_stop_event`.*
+- **F2 — The API key could only come from an environment variable the app would
+  never see.** A GUI app launched from Finder or a Login Item inherits
+  `launchd`'s environment, not your shell's, so `~/.zshrc` exports are
+  invisible. The log shows five 401s, each of which the user experienced as
+  *"I'm sorry, I could not process that"* with no hint that the real problem was
+  authentication. The single biggest usability defect, and the reason
+  Preferences exists. *Fixed: Keychain, and errors that name the actual cause.*
+- **F3 — Every word spoken near the machine was written to disk in plaintext,
+  for ever.** `pipeline.py` logged `"heard: %r"` at INFO, to an unrotated file
+  in the project folder. The file held verbatim private conversation — medical
+  talk, arguments, profanity. The most serious problem in the repository, and a
+  direct consequence of an otherwise reasonable logging decision. *Fixed: §6.3.*
+- **F4 — Nothing was under version control.** Two thousand lines of working
+  code, no history, no way to bisect, no backup.
+- **F11 — Config and log paths were relative to the code directory**, which
+  inside a signed `.app` is read-only and writing there breaks the signature.
+  Critical *for shipping*: the app worked, but could not be packaged at all.
+  *Fixed: `platform/paths.py`.*
 
-```
-File ".../threading.py", line 1171, in _wait_for_tstate_lock
-    self._stop()
-TypeError: 'Event' object is not callable
-```
+**Architecture**
 
-This appears 5+ times in `starcop.log`, from both `_quit` (`app.py:102`) and the Stop menu
-item (`app.py:79`). Consequence: the app cannot be stopped cleanly; the mic stream and the
-worker are left running; the user force-quits. **Fix: rename to `_stop_event`.** One line.
-It also argues for composition over inheritance — the new `Runner` will *hold* a thread
-rather than *be* one.
+- **F5 — One thread did four jobs**, none of which should block the others: VAD,
+  Whisper, the LLM call and blocking TTS, all on the thread that was supposed to
+  be draining the audio queue — which was **unbounded**. The log shows the
+  consequence directly: `Processing audio with duration 00:21.210`. Twenty-one
+  second "utterances" are not how people speak; they are a backlog being
+  processed in one lump. That was the lag. *Fixed: §4.3.*
+- **F6 — The wake word could not fire until you stopped talking *and* Whisper
+  finished** — one to three seconds, with no feedback of any kind in between, so
+  people repeated themselves, which re-triggered. *Fixed: §5.2.*
+- **F7 — The segmenter was not reset when audio was dropped**, so half an
+  utterance from before the trigger was glued onto whatever was said after the
+  answer. `tick()` was skipped on that path too, so deadlines only advanced when
+  the queue happened to be empty.
+- **F8 — A bare `except Exception` around transcription hid real failures.** A
+  missing model, a corrupt download and a bad frame all looked identical:
+  silence. *Fixed: typed errors in `stt/base.py`.*
+- **F9 — No conversation memory.** Every question built a fresh two-message
+  prompt. "What about tomorrow?" meant nothing.
+- **F10 — Nothing was cancellable.** Once dispatched, the LLM call ran to its
+  120-second timeout and TTS spoke the whole answer, with no way to interrupt
+  short of quitting — which crashed (F1).
 
-**F2 — The API key can only come from an environment variable the app will never see.**
-`config.py:82` reads `os.environ.get(self.api_key_env)`. A GUI app launched from Finder, a
-Login Item, or a `.app` bundle inherits `launchd`'s environment, not your shell's — so
-`~/.zshrc` exports are invisible. Result, from the log:
+**Packaging and behaviour**
 
-```
-ERROR starcop.pipeline: LLM failed: HTTP 401 from https://api.openai.com/v1/chat/completions
-```
-
-…five separate times, each of which the user experienced as the assistant saying *"I'm sorry,
-I could not process that."* with no indication that the real problem was authentication. This
-is the single biggest usability defect and the reason for the Preferences requirement.
-
-**F3 — Every word spoken near the machine is written to disk in plaintext, forever.**
-`pipeline.py:77` logs `log.info("heard: %r", text)`. The default `log_level` is `INFO` and the
-default `log_file` is `starcop.log`, with no rotation. The current file is 131 KB and contains
-verbatim private conversation — medical talk, arguments, profanity. It is world-readable,
-never truncated, and sits in the project folder. **This is the most serious problem in the
-repo** and it is a direct consequence of an otherwise-reasonable logging decision.
-
-**F4 — Nothing is under version control.** `~/Code/git/StarTrekComputer` is not a git
-repository (`fatal: not a git repository`). ~2,000 lines of working code with no history, no
-branches, no way to bisect a regression, and no backup. Refactoring on top of this is
-reckless.
-
-### 2.2 Architecture
-
-**F5 — One thread does four jobs, none of which should block the others.**
-`Runner.run()` (`runner.py:25-44`) performs VAD, Whisper inference, the LLM HTTP call and the
-blocking TTS on the same thread that is supposed to be consuming the audio queue. Whisper on
-CPU takes 0.3–2 s per utterance; an LLM call takes 1–10 s; TTS takes as long as the answer.
-The audio queue (`audio.py:25`) is **unbounded**, so it grows without limit during any of
-these. The log shows the consequence directly:
-
-```
-INFO faster_whisper: Processing audio with duration 00:21.210
-INFO faster_whisper: Processing audio with duration 00:18.450
-INFO faster_whisper: Processing audio with duration 00:17.760
-```
-
-Twenty-one-second "utterances" are not how people speak. They are a backlog being processed
-in one lump. This is the lag.
-
-**F6 — The wake word cannot fire until you stop talking *and* Whisper finishes.**
-Detection happens in `pipeline.feed_utterance()`, i.e. after `end_silence_ms` (700 ms) of
-silence has ended the utterance *and* after transcription. Best case latency from saying
-"Computer" to any acknowledgement is roughly 1–3 seconds, and there is **no feedback at all**
-during that time — no chime, no icon change, nothing. The user cannot tell whether they were
-heard, so they repeat themselves, which re-triggers.
-
-**F7 — The segmenter is not reset when audio is dropped.**
-`runner.py:37-38` `continue`s past `segmenter.process_frame()` during THINKING/SPEAKING, but
-never calls `segmenter.reset()`. A half-captured utterance from before the trigger survives
-in `_buf` and gets glued onto whatever is spoken after the answer finishes. Also, `tick()` is
-skipped on that path, so deadline logic only advances when the queue happens to be empty.
-
-**F8 — Bare `except Exception` around transcription hides real failures.**
-`pipeline.py:70` catches everything and drops the utterance. A missing model, a corrupt
-download, or an OOM looks identical to a bad frame: silence. Needs typed exceptions and a
-surfaced error state.
-
-**F9 — No conversation memory.** `_dispatch()` (`pipeline.py:112`) builds a fresh two-message
-prompt every time. "Computer, what's the weather" → answer → "Computer, what about tomorrow?"
-produces a model with no idea what "tomorrow" refers to. There is no `conversation_id`, no
-message history, nothing to build a chat window on top of.
-
-**F10 — Nothing is cancellable.** Once `_dispatch()` starts, the LLM call runs to its 120 s
-timeout and TTS speaks the entire answer. There is no way to interrupt a wrong or long answer
-short of quitting the app (which, per F1, crashes).
-
-### 2.3 Packaging blockers
-
-**F11 — Config and log paths are relative to the code directory.**
-`config.py:141-142` resolves `config.json` as `os.path.join(os.path.dirname(__file__), "..")`
-— inside the app bundle once packaged, which is read-only and signed (writing there breaks the
-signature). `log_file` defaults to the bare relative path `"starcop.log"`, which for a
-Finder-launched `.app` resolves against `/`. Both must move to the OS's application-support
-directory before packaging is possible at all.
-
-**F12 — No icon, no bundle metadata, no build script.**
-`app.py:43` uses `QStyle.SP_ComputerIcon`, a generic system glyph — deliberately, to avoid
-binary assets in the repo. There is no `.icns`, no `Info.plist`, no `LSUIElement`, no
-`NSMicrophoneUsageDescription`, no entitlements, no spec file, no DMG.
-
-**F13 — Log written twice.** `starcop-start.sh` redirects stdout into `starcop.log` while
-`setup_logging()` (`main.py:30-33`) already attaches both a `StreamHandler` *and* a
-`FileHandler` to the same path. Every line appears twice, as visible in the first 30 lines of
-the log.
-
-**F14 — The venv is inconsistent.** `.venv/pyvenv.cfg` claims `version = 3.9.6` with
-`home = /Users/edmartin/.venv/bin`, while `.venv/lib` contains `python3.12` and the log shows
-uv-managed CPython 3.12.14. This works by accident. The rebuild should pin a known interpreter.
-
-### 2.4 Behaviour
-
-**F15 — Any sentence containing the trigger word fires it.** `wakeword.py:31` matches
-`\bcomputer\b` anywhere. "My computer is broken" wakes the assistant. Documented as a
-trade-off in the docstring, but combined with F6 (no feedback) it is invisible when it
-happens.
-
-**F16 — Only two of the three natural phrasings work.** `split_command()` (`wakeword.py:47`)
-always returns the text *after* the trigger. So:
-- "Computer, what is the answer?" → works.
-- "Something has happened, Computer, what is the answer?" → works.
-- "…what is the answer, **Computer**?" → returns an empty command, waits 1.5 s, then sends an
-  empty query. The single most natural Star Trek phrasing is the one that fails.
-
-**F17 — Deaf while speaking.** Per `runner.py:37`, all audio is discarded during SPEAKING.
-Barge-in is impossible by construction.
-
-**F18 — `say` sounds dated**, and `pyttsx3` on macOS needs `pyobjc` which isn't in
-`requirements.txt`.
+- **F12 — No icon, no bundle metadata, no build script.** *Fixed: §8, D18.*
+- **F13 — The log was written twice**, once by a shell redirect and once by a
+  `FileHandler` on the same path.
+- **F14 — The venv was inconsistent**: `pyvenv.cfg` claimed 3.9.6 while `lib`
+  contained 3.12. It worked by accident.
+- **F15 — Any sentence containing the trigger word fired it.** "My computer is
+  broken" woke the assistant — invisibly, because of F6. *Fixed: §5.1.*
+- **F16 — Only two of the three natural phrasings worked.** `split_command()`
+  always returned the text *after* the trigger, so *"…what is the answer,
+  **Computer**?"* sent an empty query. The most natural phrasing was the one
+  that failed. *Fixed: §5.1.*
+- **F17 — Deaf while speaking.** All audio was discarded during SPEAKING, so
+  barge-in was impossible by construction. *Fixed: §5.4.*
+- **F18 — `say` sounds dated**, and `pyttsx3` on macOS needs `pyobjc`, which was
+  not in the requirements.
 
 ---
 
@@ -255,7 +171,9 @@ Settled in conversation on 2026-08-27. These are the constraints the implementat
 
 ---
 
-## 4. Target architecture
+---
+
+## 4. Architecture
 
 ```
 ┌──────────────────────── Qt main thread ────────────────────────┐
@@ -369,6 +287,8 @@ Every queue between stages becomes bounded, with an explicit and *logged* drop p
 
 Today's unbounded queue is why lag compounds rather than degrading. A dropped frame is a
 better failure than a growing backlog.
+
+---
 
 ---
 
@@ -574,6 +494,8 @@ Esc cancels whatever is in flight and returns to IDLE, recording the truncation.
 
 ---
 
+---
+
 ## 6. Settings, secrets and privacy
 
 ### 6.1 Where things live
@@ -670,6 +592,8 @@ features":
 
 ---
 
+---
+
 ## 7. The chat window
 
 Frameless-titlebar Qt window hosting a `QWebEngineView`, hidden by default (D9), opened by
@@ -695,6 +619,8 @@ speaking, and a compact provider/model indicator.
 **Design:** dark by default with a light theme following the system, generous type, one
 restrained accent colour. The 🖖 appears next to the trigger word wherever it is displayed
 (D2). Explicitly **not** LCARS — D1 rules out Star Trek visual references.
+
+---
 
 ---
 
@@ -746,136 +672,22 @@ documented, same trade-off as macOS. Same codebase; anything platform-specific l
 
 ---
 
-## 9. Spikes to run first
-
-Time-boxed, done **before** the phases that depend on them, because each could invalidate a
-design decision.
-
-| # | Question | Box | If it fails |
-|---|---|---|---|
-| S1 | Does Whisper capture coexist with macOS Voice Control, both active, no degradation? (D6) | 2 h | Voice Control coexistence becomes a documented limitation; Preferences gains a "pause while Voice Control is active" mode |
-| S2 | Does openWakeWord detect a custom "computer" reliably, and at what CPU cost and false-positive rate? (§5.3) | 4 h | Transcript-only triggering; barge-in cuts ~1 s later but stays *correct* (D12a) — a polish loss, not a design failure |
-| S3 | Does a PyInstaller bundle with QtWebEngine launch under hardened runtime with the entitlements above? (§8.1) | 4 h | Fall back to a `QDialog`-based native Preferences and reconsider D3 for the chat window |
-| S4 | Piper voice quality and latency vs `say`, on this machine (D11) | 2 h | Keep system voices and ship a curated voice picker |
-| S5 | Does barge-in self-trigger on built-in speakers with layers 1–4? (§5.4.2) | 3 h | Barge-in is headphones-only, documented; Stop button everywhere — and the Stop button now produces a correct truncation record too (D12a), so interrupting by hand is conversationally identical to interrupting by voice |
-| S6 | `keyring` behaviour inside a signed vs ad-hoc-signed bundle (Keychain ACLs are identity-bound) | 1 h | Prompt-on-every-launch is acceptable short-term; resolved by real signing |
-
-S6 is worth calling out: Keychain items are bound to the signing identity, so **an ad-hoc
-signed build will re-prompt when the signature changes between rebuilds**. Annoying during
-development, resolved by D4's eventual certificate.
-
 ---
 
-## 10. Phases
+## 9. What the spikes answered
 
-Each phase ends with a green test suite and a working app. No phase leaves the tree broken.
+Six questions were time-boxed before the work that depended on them. Building
+and running the app answered three of them outright; three need a person in a
+room with a microphone, and are still open.
 
-### Phase 0 — Safety net *(half a day)*
-1. `git init`; `.gitignore` for `.venv/`, `__pycache__/`, `*.log`, `config.json`, `dist/`,
-   `build/`, `*.db`, `.DS_Store`; **commit today's state verbatim as the baseline.**
-2. Publish to GitHub **via GitHub Desktop** — Ed's normal tool, and the path of least
-   resistance: `Add ▸ Add Existing Repository…`, point it at the folder, then
-   `Publish repository`. **Untick "Keep this code private"** for a public repo (D14). No CLI,
-   no credential wrangling, no need for anyone to know the account name — Desktop already has
-   it. `gh repo create` remains a fallback if the CLI turns out to still be authenticated.
-3. ~~Delete `starcop.log`~~ — **done, 2026-08-27.** Removed before it could be committed.
-4. Rebuild the venv against a pinned Python 3.12 (F14); `pyproject.toml` replaces the
-   requirements files.
-5. Verify all 54 tests pass on the rebuilt environment. *This is the baseline everything else
-   is measured against.*
-
-> **Operational note — what an agent session can and cannot do here.**
-> A Cowork session reaches this folder through a bridge into an isolated Linux VM with the
-> folder mounted; it is *not* a shell on the Mac. Consequences for Phase 0:
-> - `git` **is** available in the VM, so `git init`, `add` and `commit` work fine on the
->   mounted folder — the local repo can be created by an agent.
-> - `gh` is **not** installed there, and macOS keychain credentials are not reachable from it,
->   so **publishing and pushing must happen on the Mac**. Ed uses **GitHub Desktop**, which is
->   the recommended route (step 2) — it needs no CLI auth and no account name. An agent creates
->   the local repo and the baseline commit; Desktop publishes it.
-> - The venv rebuild (step 4) and the test run (step 5) execute macOS arm64 binaries and
->   therefore also **must run on the Mac**, not in the VM. An agent can write the commands and
->   read the output, but cannot run them.
-> - **Renaming the connected folder (Phase 1, step 6) severs the bridge.** Do it *last* in any
->   session, and expect to reconnect the folder in the desktop app afterwards.
-
-### Phase 1 — Rename and stabilise *(1 day)*
-6. Rename `~/Code/git/StarTrekComputer` → `BackgroundAssistant`; `starcop` → `bgassist`;
-   all user-facing strings (D1). One mechanical commit, separate from behaviour changes.
-7. **Fix F1** — `_stop` → `_stop_event`, and make `Runner` hold a thread rather than subclass
-   one. Add a regression test that starts and stops the runner 10 times.
-8. **Fix F7** — reset the segmenter when audio is dropped; tick the pipeline on every path.
-9. **Fix F3/F13** — the new logging module, the `RedactingFilter`, rotation, and the test
-   asserting no transcript reaches any log record. Delete `starcop-start.sh`.
-10. **Fix F11** — `platform/paths.py`; settings and logs move to the app-support directory.
-11. Fix F8 — typed exceptions from the transcriber, surfaced as an error state.
-
-*Deliverable: the app you have today, but it quits cleanly, keeps no record of your
-conversations, and is ready to be packaged.*
-
-### Phase 2 — Settings, secrets, Preferences *(2–3 days)*
-12. `settings/` — typed schema, observable JSON store, validation, live-apply where possible.
-13. `settings/secrets.py` — keyring; remove `${ENV}` expansion.
-14. `settings/migrate.py` — import the old `config.json` and offer to move `OPENAI_API_KEY`
-    into the Keychain.
-15. Provider backends: streaming OpenAI, **new Anthropic**, local with **server detection**,
-    custom. One `LLMBackend` protocol with streaming and cancellation.
-16. Preferences window (D3), all six tabs, "Test connection", "Detect local servers", 🖖 (D2).
-17. Richer tray menu: status with state icon, Preferences, Open chat, Start/Stop, Quit.
-
-*Deliverable: **F2 is dead.** You can install a key and pick a provider without touching a
-terminal. Run S1, S2, S4, S6 during this phase.*
-
-### Phase 3 — Engine rearchitecture *(3–4 days)*
-18. `core/events.py` — EventBus and event types.
-19. Split the worker into audio / segmenter / transcriber / orchestrator / speaker threads with
-    bounded queues and the drop policy of §4.3 (fixes F5).
-20. `core/trigger.py` — position-aware grammar (fixes F16), sensitivity levels (F15),
-    exhaustive classification tests.
-21. `llm/prompts.py` — trigger-marked context (D8) and the fixture corpus.
-22. Streaming LLM → sentence-chunked TTS (§5.2).
-23. Cancellation everywhere (F10).
-24. Wake spotter + instant chime + tray state (§5.3), gated on S2 — now optional polish, not a
-    prerequisite.
-25. **Truncation record (§5.4.1, D12a)** — `spoken_upto` from the TTS stop path, interrupted
-    messages, prefix-only LLM history, retro-transcription from the ring buffer. *Build this
-    before the detection work*: it is the part that makes interruption useful, it is testable
-    without any acoustics, and the Stop button exercises the whole path.
-26. Barge-in detection (§5.4.2), gated on S5.
-27. `storage/` — encrypted conversation store, multi-turn history (fixes F9).
-
-*Deliverable: it feels fast, all three phrasings work, it can be interrupted, and it remembers
-the last thing it said.*
-
-### Phase 4 — Chat window *(2–3 days)*
-28. `ui/bridge.py` — QWebChannel API surface.
-29. Chat window shell, hidden by default, hotkey and tray to open (D9).
-30. The web UI of §7: conversation rail, streaming messages, markdown, composer,
-    push-to-talk (D10), context disclosure.
-31. Auto-titling, search, delete, export.
-32. Light/dark following the system.
-
-### Phase 5 — Voice *(1 day, gated on S4)*
-33. Piper integration + bundled voice + voice picker with preview (D11).
-34. Chime/earcons; graceful fallback to system voices.
-
-### Phase 6 — macOS packaging *(2–3 days, gated on S3)*
-35. Icon (D18): draw "Attend" at 1024×1024 on the macOS grid with correct bezel padding →
-    `.icns` ladder + Windows `.ico`; export the four tray states separately as **template
-    images** (`@1x`/`@2x`, pure black + alpha) so macOS tints them.
-36. PyInstaller spec, `Info.plist`, entitlements, hidden imports.
-37. `build_macos.sh` — build, sign (ad-hoc now, Developer ID later), DMG, optional notarize.
-38. Launch-at-login via `SMAppService`.
-39. Clean-machine test: install from the DMG, grant the mic prompt, add a key, ask a question.
-40. README rewrite; GitHub release with the DMG attached.
-
-### Phase 7 — Windows *(2–3 days)*
-41. Platform layer completion, PyInstaller spec, Inno Setup, Run-key login item, test on a
-    clean Windows machine.
-
-**Rough total: 14–20 working days.** Phases 0–2 alone (3–4 days) eliminate every critical
-finding and most of the day-to-day pain; they are worth doing even if everything after them
-slips.
+| # | Question | Answer |
+|---|---|---|
+| S3 | Does a PyInstaller bundle with QtWebEngine launch under the hardened runtime? | **Yes.** The entitlements in `build/entitlements.plist` are sufficient: the built app passes its own `--smoke`, which constructs the tray and runs the event loop. D3 stands; the native-Preferences fallback was not needed. |
+| S6 | How does `keyring` behave inside an ad-hoc signed bundle? | **Badly, as predicted, and now handled.** macOS refuses to overwrite a keychain item created under a different code signature — error −25244 — and an ad-hoc build gets a new signature on every rebuild. The store now reads its own write back and reports a key that did not stick rather than losing it silently. A Developer ID certificate ends this. |
+| S2 | Is openWakeWord reliable for a custom trigger word? | **Not needed to find out.** Under D12a a late cut is still a correct cut, so the spotter is off by default and degrades to a null object. Transcript triggering is the primary path and works. |
+| S1 | Does Whisper capture coexist with macOS Voice Control? | Open — needs a microphone. Apple's recogniser is already offered as an alternative in Preferences → Listening. |
+| S4 | Piper voice quality against `say`? | Open — needs ears. Piper is optional and falls back automatically; "Automatic" prefers Tessa among the system voices. |
+| S5 | Does barge-in self-trigger through the built-in speakers? | Open — needs a room. Layers 1–4 of §5.4.2 are implemented; if it proves unreliable, barge-in is a checkbox and the Stop button produces an identical truncation record. |
 
 ---
 
@@ -907,55 +719,25 @@ classification decision, so audio-chain debugging stays a one-liner.
 
 ---
 
-## 12. Risks
-
-| Risk | Likelihood | Impact | Response |
-|---|---|---|---|
-| QtWebEngine won't run under hardened runtime with our entitlements | medium | high | S3 spike before Phase 4; fallback is native Qt Preferences and reconsidering D3 |
-| openWakeWord unreliable for "computer" | medium | **low** (was medium) | D12a makes late detection harmless; S2 spike; fallback is transcript-only at ~1 s |
-| Barge-in self-triggers on speakers | medium | **low** (was medium) | S5 spike; fallback is headphones-only voice barge-in + the Stop button, which produces an identical truncation record |
-| ctranslate2 / onnxruntime don't bundle cleanly | medium | high | arm64-only; explicit `--collect-all`; worst case ships as a source install |
-| Bundle exceeds 600 MB | medium | low | download the model on first run instead of bundling |
-| Keychain re-prompts on every ad-hoc rebuild | **high** | low | expected (S6); resolved by a real certificate |
-| Whisper contends with Voice Control | low | medium | S1 spike; fallback is a documented limitation + a pause mode |
-| Scope creep across 7 phases | **high** | high | Phases 0–2 are the contract; everything after is separately re-committed to |
-
 ---
 
-## 13. Open questions
+## 13. Questions that were open, and their answers
 
-Answers wanted before implementation starts, but none of them block Phase 0.
-
-~~1. GitHub account name~~ — **resolved.** Publishing goes through GitHub Desktop (Phase 0,
-   step 2), which already holds the account. Nothing further needed.
-~~2. Icon direction~~ — **resolved, see D18/D18a.** "Attend" chosen from five concepts.
-~~3. Global hotkey~~ — **resolved, see D17a.** None by default; optional field in Preferences.
-~~4. System prompt~~ — **resolved, see D17b.** Calm persona ships as the default, editable.
-~~5. Retention~~ — **resolved: yes, and it is off by default.** Preferences → Privacy has
-   "Delete conversations automatically after a while" with a day count. Unticked out of the
-   box, so the shipped behaviour is exactly what you asked for: kept until you delete them.
-~~6. Multiple keys~~ — **resolved: several stored at once**, as assumed. One keychain
-   account per provider, so switching provider in the dropdown never means re-entering a key.
-~~7. Notifications~~ — **resolved: available, off by default.** For an ambient app a banner
-   per answer is noise, so it is a General checkbox; when it is on, clicking the notification
-   opens the chat window.
-~~8. Intel Mac support~~ — **resolved: arm64 only**, documented in the README. Nothing in
-   the code is architecture-specific; only the bundle is. If an Intel machine turns up, it
-   runs from source.
-~~9. Windows timing~~ — **resolved: the platform layer landed now, the build waits.**
-   `bgassist/platform/` and the Inno Setup script are written and tested, because doing it
-   alongside was nearly free; actually building and testing on Windows waits until macOS has
-   settled.
-~~10. The transcript context disclosure~~ — **resolved: kept, collapsed.** It is a
-   `<details>` under each of your own messages, so it costs one line until you open it, and it
-   makes the privacy model something you can check rather than something you are told.
-~~11. Unspoken remainder~~ — **resolved: yes, dimmed behind a disclosure**, as assumed.
-    The message is marked *interrupted*, the spoken prefix renders normally, and "Show what it
-    was about to say" reveals the rest.
-~~12. Interrupted during THINKING~~ — **resolved: shown, greyed, marked "cancelled".**
-    Vanishing would make the window disagree with what you remember happening. It is stored
-    with `superseded = 1` and `history_from_messages()` skips it, so the model never sees it.
-~~13. Speaker labels / diarisation~~ — **resolved, see D17.**
+| # | Question | Answer |
+|---|---|---|
+| 1 | GitHub account | Published through GitHub Desktop. |
+| 2 | Icon direction | "Attend" — D18, D18a. |
+| 3 | Global hotkey | None by default; an optional field — D17a. |
+| 4 | System prompt | Calm persona ships as the default, editable — D17b. |
+| 5 | Retention | Auto-delete exists, **off** by default. Conversations are kept until deleted. |
+| 6 | Multiple keys | Several stored at once, one keychain account per provider. |
+| 7 | Notifications | Available, **off** by default; clicking one opens the chat window. |
+| 8 | Intel Macs | arm64 only. Nothing in the code is architecture-specific; only the bundle is. |
+| 9 | Windows timing | The platform layer landed with everything else; the build waits. |
+| 10 | Context disclosure | Kept, collapsed, under each of your own messages. |
+| 11 | Unspoken remainder | Shown dimmed behind a disclosure. |
+| 12 | Interrupted during THINKING | Shown greyed and marked *cancelled*, stored with `superseded = 1`, never sent to the model. |
+| 13 | Diarisation | Deferred; the `speaker` field is reserved — D17. |
 
 ---
 
@@ -976,121 +758,89 @@ Noted so they are not forgotten, and so the design does not accidentally foreclo
 
 ---
 
-## 15. Appendix — findings index
-
-| ID | Severity | Where | One line |
-|---|---|---|---|
-| F1 | critical | `runner.py:23` | `_stop` shadows `Thread._stop`; Stop and Quit raise `TypeError` |
-| F2 | critical | `config.py:82` | API key only from an env var a GUI app never sees → silent 401s |
-| F3 | critical | `pipeline.py:77` | Every utterance logged verbatim to an unrotated plaintext file |
-| F4 | critical | repo | No version control at all |
-| F5 | high | `runner.py:25`, `audio.py:25` | One thread does everything; unbounded audio queue; lag compounds |
-| F6 | high | `pipeline.py:66` | Wake word can't fire until silence + transcription; no feedback meanwhile |
-| F7 | high | `runner.py:37` | Segmenter not reset when audio is dropped; `tick()` skipped on that path |
-| F8 | medium | `pipeline.py:70` | Bare `except` around transcription hides real failures |
-| F9 | high | `pipeline.py:112` | No conversation memory; every question is one-shot |
-| F10 | high | `pipeline.py:112` | Nothing is cancellable once dispatched |
-| F11 | critical* | `config.py:141`, `main.py:33` | Config and log paths relative to code dir — blocks packaging entirely |
-| F12 | high | `app.py:43` | No icon, no bundle metadata, no build script |
-| F13 | low | `starcop-start.sh` | Log written twice |
-| F14 | low | `.venv/pyvenv.cfg` | venv claims 3.9.6, contains 3.12 |
-| F15 | medium | `wakeword.py:31` | Any sentence containing the trigger word fires it |
-| F16 | high | `wakeword.py:47` | Trailing-trigger phrasing sends an empty query |
-| F17 | medium | `runner.py:37` | Deaf while speaking; barge-in impossible |
-| F18 | low | `tts.py:38` | `say` sounds dated; `pyobjc` missing from requirements |
-
-\* critical *for the stated goal* — the app works today, but cannot be packaged at all until
-this is fixed.
-
-
 ---
 
-## 16. Implementation record (2026-08-27)
+## 16. What happened when it was built
 
-Written after the fact, in the same spirit as the rest of this document: what was actually
-built, where it departed from the plan and why, and what is left.
+### 16.1 Where it departed from the plan
 
-### 16.1 What landed
+- **`--check`, a headless end-to-end mode.** `--selftest` needs a WAV, a model
+  and an audio stack; `--check` drives the whole app with fakes — trigger
+  grammar, orchestrator, responder, conversation store, settings bridge — and
+  runs anywhere. It is the first thing `build_macos.sh` runs.
+- **The "leading" rule was wrong and was replaced.** "Trigger in the first ~3
+  words" classified *"my computer is broken"* as leading, which bypasses the
+  sensitivity policy and leaves F15 half-fixed. LEADING now means *addressed*:
+  nothing before the trigger but filler. Writing the tests changed the design.
+- **"yes" and "no" are not filler words.** They were, briefly, and *"the
+  computer says no"* woke the assistant — with "no" discounted there was nothing
+  meaningful after the trigger, so it read as TRAILING.
+- **The icon is drawn in code**, so the repository still contains no binary
+  assets and `tools/make_icons.py` regenerates the ladder anywhere.
+- **A key-file fallback for machines with no keychain**, because a
+  keychain-less `SecretStore` keeps keys in memory, which would have made every
+  stored conversation unreadable after a quit.
+- **`marked.js` was not vendored.** Fetching it would have meant reaching the
+  network for a bundled asset; `ui/web/vendor/markdown.js` is a small renderer
+  written for this app instead.
 
-Three commits on top of a verbatim baseline of the old tree:
+### 16.2 What only appeared on real hardware
 
-| Commit | Contents |
-|---|---|
-| `Baseline` | The pre-refactor tree exactly as it was, so there is something to bisect back to. |
-| `Rebuild the engine as bgassist` | Phases 1–3 engine-side: the rename and split, F1/F3/F5/F7/F8/F9/F10/F11/F13/F15/F16, the truncation record. |
-| `Add the UI, the composition root, packaging and the icon` | Phases 2/4/5/6/7: Preferences, chat window, tray, icon, CLI, build scripts. |
-| `Push-to-talk, spotter sensitivity, and the rest of the test matrix` | The remaining §11 rows and the two barge-in layers that had been stubbed. |
+Six bugs that no amount of reasoning found, in the order they turned up. They
+are recorded because each one is a class of mistake, not a typo.
 
-**Tests: 53 → 250**, running in about thirty seconds with none of the heavy dependencies
-installed. Every row of the §11 table has coverage, including the two that matter most:
-a full mock session asserting that no log record contains the spoken text, and the truncation
-record asserting that LLM history carries the spoken prefix and never the full answer.
+1. **A test can reach the real Keychain.** The `Application` fixture did not
+   pass a secret store, so on macOS it built one — reading, writing and deleting
+   entries under the account the shipped app keeps the user's API key in. It hid
+   on Linux, where `keyring` is usually absent. `conftest.py` now makes the
+   system keychain unreachable from any test, and asserts it.
+2. **Patching `sys.platform` is global.** A test set it to `win32` to check
+   voice selection; `bgassist.tts.sys` *is* the `sys` module, so `shutil.which()`
+   inside the new Piper attempt took the Windows path on a Mac. The platform is
+   now a parameter, not a global read.
+3. **A provider will refuse a preference.** Newer OpenAI models accept only the
+   default temperature and returned HTTP 400 — the request refused over a
+   *preference*, not over the question. Backends now read what the provider
+   objected to and retry without it, rather than keeping a table of model names
+   that would be wrong within the month.
+4. **A reasoning model spends its budget before answering.** Hidden reasoning is
+   billed against `max_completion_tokens`, so a budget sized for a spoken
+   sentence produced an empty completion and *"I have nothing to report"*. An
+   empty answer that hit the limit is retried once with room to think.
+5. **Finder loses `rm -rf` a race.** The build ends by opening Finder on
+   `dist/`, so the next run's `rm` emptied the folder while Finder wrote
+   `.DS_Store` back into it, and the closing `rmdir` failed. Directories are now
+   renamed out of the way and deleted under a name nothing is watching.
+6. **A packaging hook can be wrong about you.** `pyinstaller-hooks-contrib`
+   copies metadata for the distribution named `webrtcvad`; we depend on
+   `webrtcvad-wheels`, so the hook raised and aborted analysis. `build/hooks/`
+   overrides it — user hooks outrank contributed ones.
 
-### 16.2 Deviations from the plan, and why
+Two smaller ones, both found by looking rather than testing: `iconutil` rejects
+an `.iconset` containing any filename it does not recognise, and the markdown
+renderer turned *"1066. Harold was killed at Hastings"* into list item 1066.
 
-- **`--check`, a new headless end-to-end mode.** `--selftest` needs a WAV, a Whisper model and
-  a machine with an audio stack; `--check` drives the whole app with fakes — trigger grammar,
-  orchestrator, responder, conversation store, settings bridge — and runs anywhere, including
-  the Linux VM this work was done in. It is now the first thing `build_macos.sh` runs.
-- **The `leading_window` rule was wrong and was replaced.** "Trigger in the first ~3 words"
-  classified *"my computer is broken"* as LEADING, which bypasses the sensitivity policy
-  entirely and leaves F15 half-fixed. LEADING now means *addressed*: nothing before the trigger
-  but filler. "hey computer" and "so, computer" still lead; "my computer" is medial and needs a
-  clause boundary. This is the one place where writing the tests changed the design.
-- **"yes" and "no" are not filler words.** They were, briefly, and *"the computer says no"*
-  woke the assistant, because with "no" discounted there was nothing meaningful after the
-  trigger and it read as TRAILING.
-- **The icon is drawn in code, not stored.** `bgassist/ui/icons.py` renders the "Attend" mark
-  and writes PNG bytes itself, so the repository still contains no binary assets and
-  `tools/make_icons.py` regenerates the whole ladder on any machine. The app icon sits on a
-  macOS squircle with bezel padding; the tray states are black-and-alpha template images with a
-  thicker stroke, because a 1.4 px ring disappears in the menu bar.
-- **A key-file fallback for machines with no keychain.** `SecretStore` degrades to memory when
-  `keyring` has no backend — which would silently make every stored conversation unreadable on
-  quit, since the database key would go with it. The conversation key now falls back to a 0600
-  file in the data directory, and Preferences → Privacy says which of the two is in use.
-- **Interruption during the first sentence stores no assistant turn.** Granularity is one
-  sentence (as §5.4.1 says), so a chunk killed part-way through does not count as heard. If
-  that was the only chunk, `spoke_anything` is false and the §5.4.4 rule applies: the question
-  is marked superseded and no assistant turn is recorded.
-- **`marked.js` and `highlight.js` were not vendored.** Fetching them would have meant reaching
-  the network for a bundled asset. `ui/web/vendor/markdown.js` is a small renderer written for
-  this app instead — paragraphs, emphasis, inline and fenced code, lists, links, everything else
-  escaped. Spoken-style answers are short and unformatted; if that ever stops being true, a real
-  renderer can be dropped in behind the same call.
+### 16.3 What is left
 
-### 16.3 What could not be done from here, and why
-
-This session reached the folder through a bridge into an isolated Linux VM. Everything that
-needs macOS itself, real audio hardware, or Ed's credentials is left as a short list:
-
-1. **Publish to GitHub** (Phase 0, step 2) — GitHub Desktop: `Add ▸ Add Existing Repository…`,
-   point it at `~/Code/git/BackgroundAssistant`, `Publish repository`, untick "Keep this code
-   private". The local repository and its three commits are ready and waiting.
-2. **Rebuild the venv** against a pinned 3.12 and `pip install -e '.[dev,macos]'` (Phase 0,
-   step 4). `pyproject.toml` has replaced both requirements files. The old `.venv` still claims
-   3.9.6 in its `pyvenv.cfg` (F14).
-3. **Run the suite and `--check` on the Mac** — they pass on Linux with no heavy dependencies;
-   they should be confirmed with the real ones installed.
-4. **The spikes** (§9). S1 (Voice Control coexistence), S2 (openWakeWord), S4 (Piper quality)
-   and S5 (barge-in self-triggering) all need a microphone and speakers. The code is written so
-   that each of them failing is a settings default, not a redesign: the spotter is off by
-   default and degrades to a null object, Piper falls back to the system voice, barge-in is a
-   checkbox, and Apple speech recognition is an option rather than the default.
-   **S3 (QtWebEngine under the hardened runtime) is the one with teeth** — the entitlements are
-   in `build/entitlements.plist` and the fallback, if it fails, is a native `QDialog`
-   Preferences window and reconsidering D3.
-   **S6** will bite during development: an ad-hoc signature changes on every rebuild, so the
-   Keychain will re-prompt. Expected; a certificate fixes it.
-5. **Build and install from the DMG** (Phase 6, step 39) — `build/build_macos.sh`.
-6. **Download a Piper voice** into `assets/voices/` if you want the neural voice bundled; the
-   app runs on the system voice until then.
+- **Three spikes need a person in a room**: Voice Control coexistence (S1),
+  Piper against the system voices (S4), and whether barge-in self-triggers
+  through the built-in speakers (S5). See §9. Each is a settings default if it
+  goes badly, not a redesign.
+- **Windows** is written — `bgassist/platform/`, the PyInstaller spec, the Inno
+  Setup script — and has never been run.
+- **A Developer ID certificate** would end the right-click-to-open dance and the
+  keychain re-prompting (S6). `build_macos.sh --notarize` is already wired for
+  it; set `CODESIGN_IDENTITY`.
+- **Piper voices** are supported but none is bundled; drop a `.onnx` into
+  `assets/voices/`.
 
 ### 16.4 Where to look
 
-- The interesting logic: `core/trigger.py` (grammar), `core/orchestrator.py` (the state
-  machine), `core/responder.py` (streaming, speaking, cancelling), `engine.py` (threads and
-  queues).
-- The privacy claims: `logging_setup.py`, `core/transcript.py`, `storage/crypto.py`, and
-  `tests/test_logging.py`, which is the one that would fail if F3 ever came back.
-- The thing that fixes the day-to-day pain: `ui/web/prefs.html` and `ui/bridge.py`.
+- The interesting logic: `core/trigger.py` (grammar), `core/orchestrator.py`
+  (the state machine), `core/responder.py` (streaming, speaking, cancelling),
+  `engine.py` (threads and queues).
+- The privacy claims: `logging_setup.py`, `core/transcript.py`,
+  `storage/crypto.py`, and `tests/test_logging.py` — the test that would fail if
+  F3 ever came back.
+- The thing that fixes the day-to-day pain: `ui/web/prefs.html` and
+  `ui/bridge.py`.
