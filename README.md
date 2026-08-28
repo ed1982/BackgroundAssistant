@@ -65,9 +65,11 @@ You need Python 3.10, 3.11 or 3.12 — macOS ships 3.9, which is too old. If the
 build cannot find one it says so and stops, without changing anything:
 `brew install python@3.12`, or [python.org](https://www.python.org/downloads/).
 
-The icon appears in the **menu bar**, not the Dock. Open **Preferences → AI**,
-choose a provider, paste an API key — it goes into your Keychain, never a file
-— and press **Test connection**.
+The app lives in the **menu bar**, not the Dock — no Dock icon, no window on
+launch. **Right-click its icon there and choose Preferences** — the app's own,
+not macOS System Settings. Under **AI**, pick a provider, paste an API key —
+it goes into your Keychain, never a file — and press **Test connection**.
+(Left-clicking the icon opens the chat window instead.)
 
 Running a model locally instead? Press **Detect local servers**: it probes the
 usual ports (LM Studio 1234, Ollama 11434, llama.cpp 8080) and lists what

@@ -87,3 +87,12 @@ def test_the_readme_says_it_is_a_client_not_another_assistant():
     for provider in ("OpenAI", "Claude", "Ollama", "LM Studio"):
         assert provider in opening, provider
     assert "your own API key" in opening
+
+
+def test_the_readme_says_which_preferences_it_means():
+    """"Open Preferences" reads as macOS System Settings to anyone who has not
+    found the menu-bar icon yet — and the menu is on right-click, because a
+    left-click opens the chat window."""
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "Right-click its icon" in readme
+    assert "not macOS System Settings" in readme

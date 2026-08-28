@@ -13,9 +13,10 @@ Background Assistant
 
 3. macOS will ask for microphone access. Say yes, or the app cannot hear you.
 
-4. The icon appears in the menu bar, not the Dock. Open Preferences from it,
-   choose a provider, and paste an API key — it goes into your Keychain, not
-   into a file.
+4. The icon appears in the menu bar, not the Dock. Right-click it and choose
+   Preferences — the app's own, not System Settings — then pick a provider and
+   paste an API key. It goes into your Keychain, not into a file.
+   (Left-clicking the icon opens the chat window.)
 
 5. Then just say "Computer, ..." out loud.
 
