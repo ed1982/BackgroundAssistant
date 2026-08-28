@@ -71,9 +71,16 @@ failing is a settings default rather than a redesign:
 
 ### 6. Build the app
 
+**Double-click `Build BackgroundAssistant.command`** in the project folder.
+Terminal opens to show progress, there is nothing to type, and when it finishes
+Finder opens with the DMG selected. PyInstaller installs itself into the venv
+if it is missing, and the DMG is made with `hdiutil`, so Homebrew is not
+needed. (`brew install create-dmg` gets you a prettier window layout if you
+happen to want one.)
+
+Equivalent from a shell:
+
 ```bash
-pip install pyinstaller
-brew install create-dmg      # optional
 build/build_macos.sh
 ```
 
@@ -81,7 +88,23 @@ The script regenerates the icons, runs the tests and `--check`, builds the `.app
 ad-hoc with the hardened runtime and entitlements, smoke-tests the built binary and makes the
 DMG. Add `--notarize` (and set `CODESIGN_IDENTITY`) once you have a certificate.
 
-Expect 400–600 MB. `build/README.md` has the details.
+Expect 400–600 MB and a few minutes. `build/README.md` has the details.
+
+### 6b. Install it, and never open a terminal again
+
+1. Double-click **BackgroundAssistant.dmg**.
+2. Drag **BackgroundAssistant** onto the **Applications** shortcut in that window.
+3. Eject the disk image, then open Applications and **right-click BackgroundAssistant →
+   Open → Open**. That right-click is needed exactly once: the build is not signed with a
+   paid Apple certificate, so a plain double-click gets refused the first time.
+   (If you miss the dialog: System Settings → Privacy & Security → scroll down →
+   *Open Anyway*.)
+4. Say **yes** to the microphone prompt.
+5. The icon appears in the **menu bar**, not the Dock — there is no window and no Dock icon
+   by design. Everything is in that menu: Open chat, Preferences, Start/Stop listening, Quit.
+6. Preferences → **General** → tick *Launch at login* if you want it always there.
+
+From then on it is an ordinary Mac app.
 
 ### 7. Optional
 
