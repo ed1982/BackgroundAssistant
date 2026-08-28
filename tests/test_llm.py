@@ -18,7 +18,7 @@ from bgassist.llm import (
 def test_build_messages_with_query():
     msgs = build_messages("14:00  hi", "what time is it")
     assert msgs[0]["role"] == "system"
-    assert "ship's computer" in msgs[0]["content"].lower()
+    assert "voice in a room" in msgs[0]["content"].lower()
     user = msgs[1]["content"]
     assert "Recent conversation" in user and "what time is it" in user
 

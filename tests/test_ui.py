@@ -116,7 +116,7 @@ def test_update_settings_rejects_nonsense(bridge):
 def test_restore_the_default_persona(bridge, application):
     application.settings_store.update({"ai.system_prompt": "be terse"})
     restored = bridge.restore_system_prompt()
-    assert "ship's computer" in restored
+    assert "voice in a room" in restored
     assert application.settings.ai.system_prompt == restored
 
 

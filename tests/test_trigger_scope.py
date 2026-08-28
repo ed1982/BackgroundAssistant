@@ -50,12 +50,28 @@ def test_the_quiet_corpus_stays_quiet(text):
 def test_the_prompt_explains_the_marker():
     """If the marker is not explained, the model will comment on it."""
     assert TRIGGER_MARKER in DEFAULT_SYSTEM_PROMPT
-    for phrase in ("before the marker", "after it", "do not comment",
-                   "never comment"):
-        if phrase in DEFAULT_SYSTEM_PROMPT:
-            break
-    else:  # pragma: no cover - the loop above should always find one
-        pytest.fail("the system prompt does not tell the model to ignore the marker")
+    prompt = DEFAULT_SYSTEM_PROMPT.lower()
+    assert "either side of it" in prompt, "the question can be on either side"
+    assert "never mention the marker" in prompt
+
+
+def test_the_prompt_is_paid_for_on_every_request():
+    """It is sent with every question, so it has a budget. This is not
+    tidiness: a paragraph nobody needs is billed again each time somebody asks
+    the time."""
+    assert len(DEFAULT_SYSTEM_PROMPT) < 1000, len(DEFAULT_SYSTEM_PROMPT)
+
+
+def test_the_prompt_forbids_being_helpful_at_the_conversation_s_expense():
+    """The assistant speaks into a conversation between other people. An extra
+    useful fact is not a bonus there, it is an interruption."""
+    prompt = DEFAULT_SYSTEM_PROMPT.lower()
+    assert "only what was asked" in prompt
+    assert "fewest words" in prompt
+    for forbidden in ("no caveats", "no second fact", "no offer of"):
+        assert forbidden in prompt, forbidden
+    # And it must still answer completely, not tersely.
+    assert "answer it fully" in prompt
 
 
 def test_the_marked_utterance_reaches_the_model_verbatim():
