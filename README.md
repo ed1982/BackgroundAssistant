@@ -51,10 +51,10 @@ without one macOS would refuse to open a DMG from the internet outright. So
 you build it, which is one double-click:
 
 1. Clone this repository and double-click **`Build Background Assistant.command`**.
-   Terminal opens to show progress; there is nothing to type. The first run
-   sets up its own environment and installs what it needs, so allow ten
-   minutes or so; after that it is about five. Finder opens on the finished
-   DMG. (Details and the shell equivalent: [`build/README.md`](build/README.md).)
+   Terminal opens to show progress; there is nothing to type. It sets itself up
+   on the first run, then opens Finder on the finished DMG.
+   (Shell version in [`build/README.md`](build/README.md), for the
+   double-click averse.)
 2. Open the DMG and drag the app onto **Applications**.
 3. **Right-click the app → Open → Open.** Once only. The build is signed
    ad-hoc rather than with a paid certificate, so macOS cannot check it and a
