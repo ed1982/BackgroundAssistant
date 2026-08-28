@@ -24,8 +24,11 @@
       <label class="field">
         <span class="label">Trigger word<span id="spock" class="spock"></span></span>
         <input id="trigger-words" type="text" data-setting="general.trigger_words">
-        <span class="hint">Comma-separated. Choose something you rarely say in
-          ordinary conversation.</span>
+        <span class="hint">It hears the last couple of minutes of the room, in
+          memory. Say this word <strong>on its own</strong> and it answers
+          whatever was just being discussed — no need to ask the question
+          again. Comma-separated; choose something you rarely say by
+          accident.</span>
       </label>
 
       <label class="field">
@@ -222,9 +225,9 @@
     <!-- Privacy ------------------------------------------------------- -->
     <section class="pane" data-pane="privacy">
       <p class="note">Ambient speech is transcribed in memory and never written
-        to disk. Only exchanges you actually triggered are stored — your
-        question, the answer, and the context that was sent — and they are kept
-        until you delete them.</p>
+        to disk. Only the exchanges you trigger are stored — your question, the
+        answer, and the context that was sent — in a conversation history you
+        can read and delete at any time. Nothing else you say is kept.</p>
 
       <div class="status-line" id="encryption-status"></div>
       <div class="status-line" id="counts"></div>

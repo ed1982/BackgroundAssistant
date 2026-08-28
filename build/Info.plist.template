@@ -18,7 +18,7 @@
   <key>NSHighResolutionCapable</key><true/>
 
   <key>NSMicrophoneUsageDescription</key>
-  <string>BackgroundAssistant listens for your trigger word so it can answer questions. Speech is transcribed on this Mac and is not written to disk unless you asked a question.</string>
+  <string>BackgroundAssistant listens for your trigger word so it can answer questions out loud. Only the exchanges you trigger are kept, in a conversation history you can read and delete at any time. Nothing else you say is stored.</string>
   <key>NSSpeechRecognitionUsageDescription</key>
   <string>Used only if you choose Apple speech recognition in Preferences instead of the built-in Whisper model.</string>
 </dict>

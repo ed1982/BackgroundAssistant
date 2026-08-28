@@ -189,3 +189,17 @@ def test_the_build_lets_go_of_a_mounted_disk_image():
     DMG is usually mounted from installing the previous build."""
     script = read("build_macos.sh")
     assert script.count("hdiutil detach") >= 2
+
+
+def test_the_microphone_prompt_promises_what_the_app_actually_does():
+    """The one sentence macOS shows before granting the microphone. It has to
+    describe the storage rule accurately: triggered exchanges are kept and can
+    be deleted; nothing else is."""
+    template = read("Info.plist.template").replace("__VERSION__", "1.0")
+    prompt = plistlib.loads(template.encode())["NSMicrophoneUsageDescription"]
+    for phrase in ("listens for your trigger word", "Only the exchanges you "
+                   "trigger are kept", "read and delete at any time",
+                   "Nothing else you say is stored"):
+        assert phrase in prompt, phrase
+    # The bundle built by PyInstaller must say the same thing.
+    assert "Only the exchanges you trigger are" in read("backgroundassistant.spec")

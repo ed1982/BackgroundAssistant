@@ -291,8 +291,7 @@ def run_doctor() -> int:
     store = SettingsStore()
     settings = store.settings
     print(f"provider      {settings.ai.provider} · {settings.ai.model}")
-    print(f"trigger       {', '.join(settings.general.trigger_words)}"
-          + ("  (spock)" if settings.general.easter_egg else ""))
+    print(f"trigger       {', '.join(settings.general.trigger_words)}")
     secrets = SecretStore()
     print(f"keychain      {'available' if secrets.available else 'unavailable'}")
     accounts = secrets.accounts_with_keys(["openai", "anthropic", "local",

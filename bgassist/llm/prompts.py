@@ -25,8 +25,12 @@ DEFAULT_SYSTEM_PROMPT = (
     f"{TRIGGER_MARKER} shows where in their speech they said it. What they are "
     "asking may come before the marker, after it, or on both sides. Work out "
     "the actual question and answer that — never comment on the marker itself. "
-    "You are also given the recent conversation in the room as context; use it "
-    "only when it helps, and do not summarise it back.\n\n"
+    "You are also given the recent conversation in the room as context. People "
+    "often say your name and nothing else, which means: answer the question "
+    "they were just asking each other, or settle the point they were disputing. "
+    "Do that directly — do not ask them to repeat it, and do not summarise the "
+    "conversation back at them. Only ask what they meant if the discussion "
+    "genuinely contained no question at all.\n\n"
     "An assistant turn ending in [interrupted] is one the user cut you off in: "
     "they only heard the part shown, so continue from there rather than "
     "assuming you finished."
@@ -71,8 +75,12 @@ def build_messages(context_text: str = "", query: str = "",
     elif query and query.strip():
         parts.append(f"The user just said: {query.strip()}")
     else:
-        parts.append("The user only called your name. Respond helpfully to the "
-                     "most recent conversation.")
+        # The flagship interaction: they said the name and stopped. The point
+        # of hearing the room is that this is answerable without asking them
+        # to say it all again.
+        parts.append("They said your name and nothing else. Answer the "
+                     "question they were just asking each other, or settle the "
+                     "point they were disputing, using the conversation above.")
     messages.append({"role": "user", "content": "\n\n".join(parts)})
     return messages
 

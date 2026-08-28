@@ -100,8 +100,9 @@ if sys.platform == "darwin":
             "CFBundleShortVersionString": __version__,
             "NSMicrophoneUsageDescription":
                 "BackgroundAssistant listens for your trigger word so it can "
-                "answer questions. Speech is transcribed on this Mac and is not "
-                "written to disk unless you asked a question.",
+                "answer questions out loud. Only the exchanges you trigger are "
+                "kept, in a conversation history you can read and delete at any "
+                "time. Nothing else you say is stored.",
             "NSSpeechRecognitionUsageDescription":
                 "Used only if you choose Apple speech recognition in Preferences "
                 "instead of the built-in Whisper model.",

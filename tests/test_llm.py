@@ -24,8 +24,12 @@ def test_build_messages_with_query():
 
 
 def test_build_messages_empty_query():
+    """Saying the name and nothing else is the flagship interaction: it must
+    ask the model to answer the room, not to ask the user to repeat it."""
     msgs = build_messages("14:00  hi", "")
-    assert "only called your name" in msgs[1]["content"]
+    content = msgs[1]["content"]
+    assert "said your name and nothing else" in content
+    assert "were just asking each other" in content
 
 
 class _Handler(BaseHTTPRequestHandler):

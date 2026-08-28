@@ -239,3 +239,77 @@ def test_the_icon_ladder_and_ico_are_written(tmp_path):
     assert any(p.name == "icon_512x512@2x.png" for p in written)
     ico = icons.write_ico(tmp_path / "icon.ico")
     assert ico.read_bytes()[:4] == b"\x00\x00\x01\x00"
+
+
+# -- the copy, and where the easter egg is allowed to appear --------------
+
+def test_the_spock_hand_appears_only_in_preferences():
+    """It belongs where the trigger word is chosen, and nowhere else (D2)."""
+    from pathlib import Path as _Path
+
+    root = _Path(__file__).resolve().parents[1]
+    allowed = {"prefs.html", "prefs.js"}
+    for page in ("chat.html", "chat.js", "chat.css", "app.css", "prefs.html",
+                 "prefs.js"):
+        text = _read(page)
+        if page in allowed:
+            continue
+        assert "🖖" not in text, page
+    for source in (root / "bgassist" / "ui" / "tray.py",
+                   root / "bgassist" / "cli.py"):
+        body = source.read_text()
+        # A comment explaining its absence is fine; displaying it is not.
+        assert "🖖" not in body.replace("# No 🖖 here", ""), source.name
+
+
+def test_preferences_still_shows_it_for_the_word_computer():
+    assert 'id="spock"' in _read("prefs.html")
+    assert "🖖" in _read("prefs.js")
+    assert 'toLowerCase() === "computer"' in _read("prefs.js")
+
+
+def test_the_chat_window_explains_what_it_is_actually_for():
+    """The pitch is not "say a wake word" — every assistant does that. It is
+    that the question you already asked out loud is the one it answers."""
+    script = _read("chat.js")
+    assert "It already heard the question." in script
+    assert "on its own" in script
+
+
+def test_conversations_can_be_deleted_from_the_window():
+    page, script = _read("chat.html"), _read("chat.js")
+    assert 'id="delete-all"' in page
+    assert "row-delete" in script
+    assert "deleteConversation" in script
+    assert "deleteAllConversations" in script
+    # Deleting must not also open the conversation underneath it.
+    assert "stopPropagation" in script
+    assert "row-delete" in _read("chat.css")
+
+
+def test_deleting_one_conversation_leaves_the_others(bridge, application):
+    bridge.send("first question")
+    application.orchestrator.responder.wait(5)
+    keep = bridge.new_conversation()
+    doomed = bridge.list_conversations()[-1]["id"]
+    bridge.delete_conversation(doomed)
+    remaining = [c["id"] for c in bridge.list_conversations()]
+    assert doomed not in remaining
+    assert keep in remaining
+
+
+def test_deleting_everything_leaves_nothing(bridge, application):
+    bridge.send("a question")
+    application.orchestrator.responder.wait(5)
+    assert bridge.list_conversations()
+    bridge.delete_all_conversations()
+    assert bridge.list_conversations() == []
+
+
+def test_a_year_is_not_a_numbered_list():
+    """Spoken answers open with a year constantly — "1066. Harold was killed
+    at Hastings" is a sentence, and rendering it as list item 1066 is both
+    wrong and comic. Caught by looking at the rendered window."""
+    source = _read("vendor/markdown.js")
+    assert "\\d{1,2}[.)]" in source
+    assert "\\d+[.)]" not in source

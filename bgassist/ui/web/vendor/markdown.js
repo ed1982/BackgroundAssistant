@@ -63,7 +63,11 @@
         return;
       }
       var bullet = line.match(/^\s*[-*]\s+(.*)$/);
-      var number = line.match(/^\s*\d+[.)]\s+(.*)$/);
+      // One or two digits only. Spoken answers open with a year far more
+      // often than with a numbered list — "1066. Harold was killed at
+      // Hastings" is a sentence, and rendering it as list item 1066 is
+      // both wrong and comic.
+      var number = line.match(/^\s*\d{1,2}[.)]\s+(.*)$/);
       if (bullet || number) {
         flushParagraph();
         var tag = bullet ? "ul" : "ol";

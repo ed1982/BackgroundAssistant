@@ -61,11 +61,10 @@ def create_tray(application) -> Tuple[object, object]:
     menu.addSeparator()
 
     def refresh_trigger_label() -> None:
-        general = application.settings.general
-        words = ", ".join(general.trigger_words)
-        # 🖖 beside the trigger word when it is exactly "computer" (D2).
-        suffix = "  🖖" if general.easter_egg else ""
-        trigger_action.setText(f"Say “{words}”{suffix}")
+        # No 🖖 here: it belongs in Preferences, where the trigger word is
+        # actually being chosen, and nowhere else.
+        words = ", ".join(application.settings.general.trigger_words)
+        trigger_action.setText(f"Say “{words}” to ask about what was just said")
 
     def set_status(text: str) -> None:
         status_action.setText(text)

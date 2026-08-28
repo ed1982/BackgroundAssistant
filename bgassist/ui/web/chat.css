@@ -12,13 +12,33 @@
 .conversations { list-style: none; margin: 0; padding: 0 8px; overflow-y: auto; flex: 1; }
 .conversations li {
   padding: 8px 10px; border-radius: var(--radius-sm); cursor: pointer;
-  display: flex; flex-direction: column; gap: 2px;
+  display: flex; align-items: center; gap: 8px;
 }
+.conversations .row-text { flex: 1; min-width: 0; }
+.conversations .name, .conversations .when {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Quiet until you go looking for it, but always reachable by keyboard. */
+.row-delete {
+  flex: none; opacity: 0; background: none; border: none; padding: 4px;
+  border-radius: var(--radius-sm); color: var(--text-faint); line-height: 0;
+}
+.conversations li:hover .row-delete,
+.row-delete:focus { opacity: 1; }
+.row-delete:hover { color: var(--error); background: var(--bg-sunken); }
 .conversations li:hover { background: var(--bg-raised); }
 .conversations li.active { background: var(--bg-raised); box-shadow: inset 2px 0 0 var(--accent); }
 .conversations .name { font-weight: 550; }
 .conversations .when { font-size: 12px; color: var(--text-faint); }
-.rail-foot { padding: 10px 14px; border-top: 1px solid var(--line); }
+.rail-foot {
+  padding: 10px 14px; border-top: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.link-button {
+  background: none; border: none; padding: 0; font-size: 12px;
+  color: var(--text-faint);
+}
+.link-button:hover { color: var(--error); }
 
 /* -- main --------------------------------------------------------------- */
 .main { display: flex; flex-direction: column; min-width: 0; }
@@ -82,4 +102,11 @@ details.disclosure .content {
 .ptt.active { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
 .composer-meta { display: flex; justify-content: space-between; padding: 0 20px 12px; }
 
-.empty { text-align: center; color: var(--text-faint); margin-top: 20vh; }
+.empty {
+  max-width: 460px; margin: 18vh auto 0; text-align: center;
+  color: var(--text-dim);
+}
+.empty p { margin: 0 0 10px; }
+.empty .empty-headline {
+  font-size: 17px; font-weight: 600; color: var(--text); margin-bottom: 12px;
+}

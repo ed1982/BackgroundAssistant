@@ -7,6 +7,17 @@ import pytest
 
 from bgassist.tts import MockTts, Pyttsx3Tts, SayTts, TtsError, make_tts
 
+INSTALLED = ["Alex", "Daniel", "Samantha", "Tessa"]
+
+
+@pytest.fixture(autouse=True)
+def _installed_voices(monkeypatch):
+    """Never shell out to `say -v ?` in a test, and never depend on which
+    voices this particular machine happens to have."""
+    monkeypatch.setattr(SayTts, "_voice_cache", list(INSTALLED))
+    yield
+    SayTts._voice_cache = None
+
 
 def test_say_command(monkeypatch):
     calls: list = []
@@ -44,6 +55,36 @@ def test_say_nonzero_exit_raises(monkeypatch):
     monkeypatch.setattr(subprocess, "Popen", FakeProc)
     with pytest.raises(TtsError):
         SayTts().speak("x")
+
+
+def test_an_uninstalled_voice_falls_back_instead_of_going_silent(monkeypatch):
+    """`say -v Pippa` on a Mac without Pippa exits non-zero, which used to
+    surface as "TTS failed" and total silence — losing the assistant's voice
+    over a preference."""
+    calls: list = []
+    monkeypatch.setattr(subprocess, "Popen",
+                        lambda cmd, **kw: _FakeProc(cmd, calls))
+    engine = SayTts(rate=180, voice="Pippa")   # a Siri voice: never available
+    assert engine.voice == "Tessa"             # the preferred default
+    engine.speak("hello")
+    assert "-v" in calls[0] and "Tessa" in calls[0]
+
+
+def test_automatic_prefers_tessa():
+    assert SayTts(voice=None).voice == "Tessa"
+
+
+def test_automatic_falls_through_to_whatever_is_installed(monkeypatch):
+    monkeypatch.setattr(SayTts, "_voice_cache", ["Fred", "Alex"])
+    assert SayTts(voice=None).voice is None    # let `say` pick
+
+
+class _FakeProc:
+    def __init__(self, cmd, calls):
+        calls.append(cmd)
+
+    def wait(self, timeout=None):
+        return 0
 
 
 def test_say_stop_kills_inflight():

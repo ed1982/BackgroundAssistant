@@ -30,7 +30,7 @@ def make_tts(cfg, platform: Optional[str] = None):
     system = platform or sys.platform
     engine = (getattr(cfg, "engine", "") or "auto").lower()
     rate = int(getattr(cfg, "rate", 185) or 185)
-    voice = getattr(cfg, "voice", None)
+    voice = getattr(cfg, "voice", None) or None  # "" is "automatic" too
 
     if engine == "mock":
         return MockTts()

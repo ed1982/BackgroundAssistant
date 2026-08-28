@@ -79,4 +79,4 @@ def test_history_comes_before_the_current_question():
 
 def test_an_empty_command_still_asks_something_sensible():
     messages = build_messages("[10:00]  chatter", "")
-    assert "only called your name" in messages[-1]["content"]
+    assert "said your name and nothing else" in messages[-1]["content"]

@@ -3,7 +3,15 @@
   "use strict";
 
   var backend = null;
-  var state = { conversationId: null, streaming: "", busy: false };
+  var state = { conversationId: null, streaming: "", busy: false,
+                triggerWord: "" };
+
+  // A small inline trash, rather than an emoji: it has to sit quietly in a
+  // list and only speak up on hover.
+  var TRASH_SVG =
+    '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">' +
+    '<path fill="currentColor" d="M6 2h4a1 1 0 0 1 1 1v1h3v1.5H2V4h3V3a1 1 0 0 1 1-1zm.5 2h3V3.5h-3V4zM3.5 6h9l-.6 7.1a1.5 1.5 0 0 1-1.5 1.4H5.6a1.5 1.5 0 0 1-1.5-1.4L3.5 6zm2.2 1.5.4 5.5h.9l-.4-5.5h-.9zm3.7 0-.4 5.5h.9l.4-5.5h-.9z"/>' +
+    '</svg>';
 
   var $ = function (id) { return document.getElementById(id); };
 
@@ -85,9 +93,25 @@
     var list = $("messages");
     list.innerHTML = "";
     if (!messages.length) {
+      var word = state.triggerWord || "the trigger word";
       var empty = document.createElement("div");
       empty.className = "empty";
-      empty.textContent = "Say the trigger word, or type a question below.";
+      var headline = document.createElement("p");
+      headline.className = "empty-headline";
+      headline.textContent = "It already heard the question.";
+      var body = document.createElement("p");
+      body.textContent = "It hears the last couple of minutes of the room, " +
+        "held in memory and nowhere else. Say “" + word + "” on its own and " +
+        "it answers whatever you were just talking about — you do not have " +
+        "to ask again.";
+      var also = document.createElement("p");
+      also.className = "faint";
+      also.textContent = "Or ask it directly, in any phrasing: “" + word +
+        ", what year was that?” works, and so does “what year was that, " +
+        word + "?”";
+      empty.appendChild(headline);
+      empty.appendChild(body);
+      empty.appendChild(also);
       list.appendChild(empty);
       return;
     }
@@ -107,23 +131,43 @@
       var when = document.createElement("div");
       when.className = "when";
       when.textContent = item.relative;
-      li.appendChild(name);
-      li.appendChild(when);
+      var text = document.createElement("div");
+      text.className = "row-text";
+      text.appendChild(name);
+      text.appendChild(when);
+      li.appendChild(text);
+
+      var remove = document.createElement("button");
+      remove.className = "row-delete";
+      remove.title = "Delete this conversation";
+      remove.setAttribute("aria-label", "Delete " + item.title);
+      remove.innerHTML = TRASH_SVG;
+      remove.addEventListener("click", function (event) {
+        event.stopPropagation();   // deleting is not opening
+        if (!window.confirm("Delete “" + item.title + "”?")) return;
+        backend.deleteConversation(item.id, function () {
+          if (state.conversationId === item.id) {
+            state.conversationId = null;
+            $("title").textContent = "New conversation";
+            renderMessages([]);
+          }
+          refreshConversations();
+        });
+      });
+      li.appendChild(remove);
+
       li.addEventListener("click", function () { openConversation(item.id); });
       li.addEventListener("contextmenu", function (event) {
         event.preventDefault();
         var title = window.prompt("Rename conversation", item.title);
-        if (title === null) return;
-        if (title === "") {
-          backend.deleteConversation(item.id, refreshConversations);
-        } else {
-          backend.renameConversation(item.id, title, refreshConversations);
-        }
+        if (title === null || title === "") return;
+        backend.renameConversation(item.id, title, refreshConversations);
       });
       list.appendChild(li);
     });
-    $("rail-foot").textContent = items.length + " conversation" +
+    $("count").textContent = items.length + " conversation" +
       (items.length === 1 ? "" : "s");
+    $("delete-all").classList.toggle("hidden", items.length === 0);
   }
 
   // -- data --------------------------------------------------------------
@@ -235,6 +279,16 @@
       backend.newConversation(function (id) { openConversation(id); });
     });
     $("search").addEventListener("input", refreshConversations);
+    $("delete-all").addEventListener("click", function () {
+      if (!window.confirm("Delete every stored conversation? This cannot be " +
+                          "undone.")) return;
+      backend.deleteAllConversations(function () {
+        state.conversationId = null;
+        $("title").textContent = "New conversation";
+        renderMessages([]);
+        refreshConversations();
+      });
+    });
     $("export").addEventListener("click", function () {
       if (!state.conversationId) return;
       backend.exportConversation(state.conversationId, function (text) {
@@ -266,9 +320,10 @@
       var snapshot = JSON.parse(json);
       $("provider").textContent = snapshot.provider.name + " · " +
         snapshot.provider.model;
-      var words = snapshot.trigger.words.join(", ");
-      $("trigger-hint").textContent = "Say “" + words + "”" +
-        (snapshot.trigger.easter_egg ? "  🖖" : "");
+      state.triggerWord = snapshot.trigger.words[0] || "";
+      $("trigger-hint").textContent = "Say “" +
+        snapshot.trigger.words.join("” or “") +
+        "” — even on its own, to ask about what was just said";
       setStatus(snapshot.state === "idle" ? "Listening" : snapshot.state,
                 snapshot.state);
     });

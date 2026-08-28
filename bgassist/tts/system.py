@@ -15,6 +15,17 @@ from bgassist.tts.base import TtsError
 
 log = logging.getLogger("bgassist.tts.system")
 
+#: What "Automatic" resolves to on macOS, best first. Whichever is installed
+#: wins; if none is, `say` uses the system default.
+#:
+#: Siri's own voices (Pippa, Jamie, Nicky…) are not in this list and cannot
+#: be: Apple does not expose them to `say` or to AVSpeechSynthesizer, so no
+#: third-party app can use them. Nothing to work around — the fix is to
+#: install an Enhanced or Premium voice in System Settings, which are the
+#: good ones and are meant to be used this way.
+PREFERRED_VOICES = ("Tessa", "Serena", "Fiona", "Moira", "Daniel", "Karen",
+                    "Samantha", "Ava")
+
 
 class SayTts:
     """macOS ``say(1)`` — offline, no extra dependencies."""
@@ -22,11 +33,39 @@ class SayTts:
     name = "say"
 
     def __init__(self, rate: int = 185, voice: Optional[str] = None):
+        self.voice = self.resolve_voice(voice)
         self._base_cmd = ["say", "-r", str(int(rate))]
-        if voice:
-            self._base_cmd += ["-v", voice]
+        if self.voice:
+            self._base_cmd += ["-v", self.voice]
         self._proc: Optional[subprocess.Popen] = None
         self._stopping = False
+
+    @classmethod
+    def resolve_voice(cls, voice: Optional[str]) -> Optional[str]:
+        """Turn a request into a voice that actually exists on this Mac.
+
+        `say -v Tessa` on a machine without Tessa exits non-zero, which used to
+        surface as "TTS failed" and total silence — the assistant losing its
+        voice over a preference. A voice that is not installed is simply not
+        used.
+        """
+        installed = cls.available_voices()
+        if not installed:  # `say -v ?` unavailable: let `say` decide
+            return voice
+        lookup = {name.lower(): name for name in installed}
+        if voice:
+            found = lookup.get(voice.strip().lower())
+            if found:
+                return found
+            log.warning("the voice %r is not installed on this Mac; using the "
+                        "best available one instead. Install more in System "
+                        "Settings → Accessibility → Spoken Content → System "
+                        "Voice → Manage Voices.", voice)
+        for candidate in PREFERRED_VOICES:
+            found = lookup.get(candidate.lower())
+            if found:
+                return found
+        return None
 
     def speak(self, text: str) -> None:
         self._stopping = False
@@ -50,18 +89,28 @@ class SayTts:
             except OSError:  # pragma: no cover - already gone
                 pass
 
-    @staticmethod
-    def available_voices() -> List[str]:
+    #: `say -v ?` is a subprocess, and a voice is resolved every time settings
+    #: change; the list of installed voices does not move underneath us often
+    #: enough to pay for that each time.
+    _voice_cache: Optional[List[str]] = None
+
+    @classmethod
+    def available_voices(cls, refresh: bool = False) -> List[str]:
+        if cls._voice_cache is not None and not refresh:
+            return cls._voice_cache
+        voices: List[str] = []
         try:
             out = subprocess.run(["say", "-v", "?"], capture_output=True,
                                  text=True, timeout=10)
-        except (OSError, subprocess.SubprocessError):  # pragma: no cover
-            return []
-        voices: List[str] = []
-        for line in out.stdout.splitlines():
-            parts = line.split()
-            if parts:
-                voices.append(parts[0])
+            for line in out.stdout.splitlines():
+                parts = line.split()
+                if parts:
+                    voices.append(parts[0])
+        except Exception:  # noqa: BLE001 - not being able to list voices is
+            # not a reason to be unable to speak
+            log.debug("could not list system voices", exc_info=True)
+            voices = []
+        cls._voice_cache = voices
         return voices
 
 

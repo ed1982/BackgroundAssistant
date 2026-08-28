@@ -1,112 +1,117 @@
 # BackgroundAssistant
 
-An always-on voice assistant that sits in your menu bar, listens for a trigger
-word, and answers out loud.
+### It already heard the question.
 
-Say *"Computer, what time is it in Tokyo?"* — or *"what time is it in Tokyo,
-Computer?"*, which is the more natural phrasing and works just as well — and it
-answers. It hears the conversation in the room, so *"…what about Berlin?"* has
-something to refer to. Nothing you say is written to disk unless you actually
-triggered a question.
+An assistant that sits in your menu bar, hears the room, and answers when you
+say the word — without making you repeat what you just said.
 
-Speech recognition runs locally on your machine. Only the exchanges you trigger
-are sent anywhere, and you can see exactly what was sent.
+You are arguing about when the Battle of Hastings was. Neither of you is sure.
+Instead of unlocking a phone, opening an app, and typing out the question you
+have both just said aloud, you say:
+
+> **"Computer?"**
+
+And it answers. It was already listening.
+
+That is the whole idea. *"Hey Siri, when was the Battle of Hastings"* still
+makes you ask the question. This lets you **stop** asking it.
+
+**Three ways to use it**
+
+1. **Say the word, nothing else.** It answers whatever was just being
+   discussed.
+2. **Ask it however it comes out.** "Computer, what year was that?" — or
+   "what year was that, computer?", which answers the instant you stop
+   speaking, because you have already finished asking.
+3. **Follow up without explaining again.** "Computer, what about the year
+   after?" It still has the thread.
+
+**It is not recording you.** The last couple of minutes live in memory and
+nowhere else. Only the exchanges you actually trigger are stored — in a
+history you can read and delete at any time. Nothing else is kept.
 
 ---
 
-## What it does
+## Install
+
+1. Download **BackgroundAssistant.dmg** from
+   [Releases](../../releases), or build it yourself: double-click
+   `Build BackgroundAssistant.command`.
+2. Open the DMG and drag the app onto **Applications**.
+3. **Right-click the app → Open → Open.** Once only — the build is not signed
+   with a paid Apple certificate, so a plain double-click gets refused.
+4. Say **yes** to the microphone prompt.
+
+The icon appears in the **menu bar**, not the Dock. Open **Preferences → AI**,
+choose a provider, paste an API key — it goes into your Keychain, never a file
+— and press **Test connection**.
+
+Running a model locally instead? Press **Detect local servers**: it probes the
+usual ports (LM Studio 1234, Ollama 11434, llama.cpp 8080) and lists what
+answers.
+
+macOS 13+, Apple silicon. Intel Macs can run it from source.
+
+---
+
+## What is in it
 
 | | |
 |---|---|
-| **Trigger** | Any word you choose, in any of the three natural positions: leading, mid-sentence, or trailing. A trailing trigger answers immediately, because you have already finished asking. |
-| **Listening** | Whisper, locally, on your machine. Apple's recogniser is available as an option. |
-| **Answering** | OpenAI, Claude, a local server (LM Studio · Ollama · llama.cpp · Pinokio), or any OpenAI-compatible URL. Answers stream and are spoken sentence by sentence, so speech starts in about a second. |
+| **Listening** | Whisper, locally. Apple's recogniser is available as an option. |
+| **Answering** | OpenAI, Claude, a local server, or any OpenAI-compatible URL. Answers stream and are spoken sentence by sentence, so speech starts in about a second. |
 | **Interrupting** | Say the trigger word while it is talking and it stops. What you heard is what it remembers saying. |
-| **Remembering** | Multi-turn conversations with a searchable history, encrypted on disk. |
-| **Privacy** | Ambient speech lives in memory only. Triggered exchanges are stored until you delete them. Keys live in the Keychain. |
-
-## Install
-
-**From a release:** download the DMG, drag the app to Applications, and read
-`Read Me First.txt` inside the DMG — the build is not signed with a paid Apple
-certificate yet, so the first launch needs right-click → Open.
-
-**From source:**
-
-```bash
-git clone <this repo> && cd BackgroundAssistant
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e '.[dev]'          # add ,macos or ,windows for platform extras
-python main.py
-```
-
-Requires Python 3.10–3.12. macOS is arm64; Intel Macs need to run from source.
-
-## First run
-
-The icon appears in the **menu bar**, not the Dock.
-
-1. Open **Preferences → AI**, pick a provider, and paste an API key. It goes
-   into the system Keychain — never into a file, never into a log. Press
-   **Test connection** and it will tell you exactly what happened, including
-   what a failure actually was.
-2. If you run a model locally, press **Detect local servers** instead. It probes
-   the usual ports (LM Studio 1234, Ollama 11434, llama.cpp 8080, 8000, 5000)
-   and lists what each one says it has.
-3. Grant microphone access when macOS asks.
-4. Say your trigger word.
-
-Everything else has a sensible default. There is no global shortcut unless you
-set one, and no notifications unless you turn them on.
+| **Remembering** | Multi-turn conversations, searchable, encrypted on disk. |
+| **Staying quiet** | No Dock icon, no window, no notifications unless you ask. |
 
 ## The trigger word
 
-All three of these work:
-
-- "**Computer**, what is the answer?"
-- "Something has happened, **computer**, what is the answer?"
-- "What is the answer, **computer**?" ← answers immediately, no pause
-
 "My computer is broken" does **not** wake it. Preferences → General has three
-sensitivities: *Relaxed* wakes on any mention, *Balanced* (the default) requires
-the trigger to be addressed to it, and *Strict* only accepts it at the start or
-the end of a sentence.
-
-If your trigger word happens to be `computer`, there is a 🖖 next to it.
+sensitivities: *Relaxed* wakes on any mention, *Balanced* (the default)
+requires the word to be addressed to it, and *Strict* accepts it only at the
+start or end of a sentence.
 
 ## Privacy, precisely
 
 - **What you say near the machine** is transcribed into a rolling in-memory
-  buffer (two minutes by default). It is never written to disk, never logged,
-  and it evaporates when the buffer rolls or the app quits.
+  buffer (two minutes by default), never written to disk, never logged, and
+  gone when the buffer rolls or the app quits.
 - **An exchange you triggered** is stored: your question, the answer, and a
-  snapshot of the context that was actually sent — which the chat window will
-  show you, per message. Kept until you delete it.
-- **Message bodies are encrypted** with AES-256-GCM; the key is in the Keychain.
-  Titles and timestamps stay readable so the history list renders without
-  decrypting everything.
-- **Logs never contain transcripts.** There is a debug toggle that changes this,
-  it warns you, and it switches itself off after 24 hours.
-- **Keys are never written to the settings file**, never logged, and never sent
-  to the app's own UI — Preferences shows `sk-…4f2a` and nothing more.
+  snapshot of the context that was sent — which the chat window shows you, per
+  message. Kept until you delete it, and every conversation has a delete
+  button.
+- **Message bodies are encrypted** with AES-256-GCM, the key in your Keychain.
+- **Logs never contain transcripts.** There is a debug toggle that changes
+  that; it warns you and turns itself off after 24 hours.
+- **Keys are never written to the settings file**, never logged, and never
+  shown back to the UI — Preferences displays `sk-…4f2a` and nothing more.
 
 Preferences → Privacy has *Delete all conversations* and *Delete everything*.
 
 ## Interrupting it
 
-Say the trigger word while it is speaking, press Stop in the tray or the chat
-window, or press Esc with the window focused.
-
-When you interrupt, it records **what you actually heard** — not what it had
-generated. So this works:
+Say the trigger word while it is speaking, press Stop, or press Esc. It then
+records **what you actually heard** — not what it had generated — so this
+works:
 
 > "Find out X please, Computer" → *"X is defined as…"* ← you cut in
 > "Computer, I'm sorry I meant Y"
 
-The second question is answered against a conversation in which it said "X is
-defined as" and nothing more, which is the conversation you experienced. The
-chat window will show you the rest of what it was about to say, dimmed, if you
-want it.
+The second question is answered against the conversation you experienced, in
+which it said "X is defined as" and no more. The chat window will show you the
+rest of what it was about to say, dimmed, if you want it.
+
+## Voices
+
+It speaks with a macOS system voice, preferring **Tessa**. For something
+better, install an *Enhanced* or *Premium* voice in **System Settings →
+Accessibility → Spoken Content → System Voice → Manage Voices**; it appears in
+Preferences → Voice immediately.
+
+Siri's own voices (Pippa, Jamie, Nicky) cannot be used. Apple does not expose
+them to `say` or to the speech APIs, so no third-party app can reach them —
+there is nothing to work around. Piper, a local neural voice, is supported as
+an option: drop a `.onnx` voice into `assets/voices/`.
 
 ## Command line
 
@@ -114,10 +119,7 @@ want it.
 python main.py                     run the assistant
 python main.py --check             end-to-end check with fakes: no mic, no network
 python main.py --selftest file.wav run a recording through the real audio chain
-python main.py --selftest x.wav --expect trailing
 python main.py --doctor            what is installed, and where things live
-python main.py --list-devices      input devices
-python main.py --smoke             build the tray UI and exit
 ```
 
 `--check` is the fastest way to know the whole app is wired up correctly; it
@@ -129,30 +131,25 @@ runs anywhere, including a Linux box with no audio stack at all.
 |---|---|---|
 | Settings | `~/Library/Application Support/BackgroundAssistant/settings.json` | `%APPDATA%\BackgroundAssistant\` |
 | Conversations | the same folder, `conversations.db` (encrypted) | the same |
-| Logs | `~/Library/Logs/BackgroundAssistant/` (rotating, 1 MB × 3) | `%LOCALAPPDATA%\BackgroundAssistant\logs\` |
-| Models | the data folder, `models/` | the same |
+| Logs | `~/Library/Logs/BackgroundAssistant/` (rotating, 1 MB × 3) | `%LOCALAPPDATA%\…\logs\` |
 | API keys | Keychain | Credential Manager |
 
-Nothing is written next to the code. Set `BGASSIST_HOME` to override all of it,
+Nothing is written next to the code. `BGASSIST_HOME` overrides all of it,
 which is what the test suite does.
-
-Upgrading from the earlier version of this project: the old `config.json` is
-imported automatically on first run, and if `OPENAI_API_KEY` is set in the
-environment the key is copied into the Keychain — after which you can remove
-that export from your shell profile.
 
 ## Development
 
 ```bash
-python -m pytest -q        # ~190 tests, about 15 seconds, no heavy deps needed
-python -m pytest -m integration   # the real audio chain (macOS, downloads a model)
+python3.12 -m venv .venv && source .venv/bin/activate
+pip install -e '.[dev,macos]'
+python -m pytest -q        # ~270 tests, about 30 seconds, no heavy deps needed
 python main.py --check
 ```
 
-The pure-logic core — the segmenter, the trigger grammar, the orchestrator, the
-transcript buffer and the settings — has no I/O in it and takes everything by
-injection, including the clock. That is why the tests are fast and deterministic
-and why heavy dependencies are imported lazily, inside functions.
+The pure-logic core — segmenter, trigger grammar, orchestrator, transcript
+buffer, settings — has no I/O in it and takes everything by injection,
+including the clock. That is why the tests are fast and deterministic, and why
+heavy dependencies are imported lazily inside functions.
 
 ```
 bgassist/
@@ -168,13 +165,9 @@ bgassist/
   engine.py   the worker threads and the queues between them
 ```
 
-Design and rationale: [`refactor.md`](refactor.md). The original design
-document, describing the version this replaced, is [`plan.md`](plan.md).
-
-## Building
-
-See [`build/README.md`](build/README.md). Expect 400–600 MB installed, most of
-it Qt WebEngine and the speech model.
+Design and rationale: [`refactor.md`](refactor.md). Building and packaging:
+[`build/README.md`](build/README.md). Expect 400–600 MB installed, most of it
+Qt WebEngine and the speech model.
 
 ## Licence
 
