@@ -1,4 +1,4 @@
-# BackgroundAssistant
+# Background Assistant
 
 ### It already heard the question.
 
@@ -36,7 +36,7 @@ history you can read and delete at any time. Nothing else is kept.
 
 1. Download **BackgroundAssistant.dmg** from
    [Releases](../../releases), or build it yourself: double-click
-   `Build BackgroundAssistant.command`.
+   `Build Background Assistant.command`.
 2. Open the DMG and drag the app onto **Applications**.
 3. **Right-click the app → Open → Open.** Once only — the build is not signed
    with a paid Apple certificate, so a plain double-click gets refused.
@@ -134,8 +134,11 @@ runs anywhere, including a Linux box with no audio stack at all.
 | Logs | `~/Library/Logs/BackgroundAssistant/` (rotating, 1 MB × 3) | `%LOCALAPPDATA%\…\logs\` |
 | API keys | Keychain | Credential Manager |
 
-Nothing is written next to the code. `BGASSIST_HOME` overrides all of it,
-which is what the test suite does.
+Those folders keep the unspaced name deliberately: what the app is *called*
+can change, and a rename should not leave your settings and conversations
+behind in a folder nothing looks in any more. Nothing is written next to the
+code, and `BGASSIST_HOME` overrides all of it — which is what the test suite
+does.
 
 ## Development
 

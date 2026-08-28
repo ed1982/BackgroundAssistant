@@ -362,3 +362,39 @@ def test_a_refused_write_still_works_for_this_session():
     secrets = SecretStore(backend=Refusing())
     assert secrets.set("openai", "sk-new") is False
     assert secrets.get("openai") == "sk-new"
+
+
+# -- renaming the app must not orphan anybody's data ----------------------
+
+def test_the_display_name_and_the_identity_are_separate():
+    """The app is called "Background Assistant" in Finder. Its support folder,
+    log folder, LaunchAgent label and Run key are not: a rename should never
+    strand somebody's settings and conversations in a folder nothing looks in
+    any more."""
+    from bgassist import APP_ID_NAME, APP_NAME, BUNDLE_ID
+
+    assert APP_NAME == "Background Assistant"
+    assert APP_ID_NAME == "BackgroundAssistant"
+    assert " " not in APP_ID_NAME
+    assert " " not in BUNDLE_ID
+
+
+def test_the_data_directories_use_the_identity(tmp_path, monkeypatch):
+    from bgassist import APP_ID_NAME
+    from bgassist.platform import paths
+
+    monkeypatch.delenv("BGASSIST_HOME", raising=False)
+    monkeypatch.setattr(paths, "_ensure", lambda p: p)
+    assert APP_ID_NAME in str(paths._fallback_data_dir())
+    assert APP_ID_NAME in str(paths._fallback_log_dir())
+
+
+def test_the_launch_agent_label_is_the_bundle_id():
+    """"com.edmartin.background assistant.plist" is not a filename anyone
+    wants, and launchd would not load it."""
+    from bgassist import BUNDLE_ID
+    from bgassist.platform import login_item
+
+    plist = login_item._agent_plist()
+    assert plist.name == f"{BUNDLE_ID}.plist"
+    assert " " not in plist.name

@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec for BackgroundAssistant (macOS and Windows).
+"""PyInstaller spec for Background Assistant (macOS and Windows).
 
 Written for PyInstaller 6: no cipher, no ``a.zipfiles``, ``PYZ(a.pure)``.
 
@@ -71,6 +71,9 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz, a.scripts, [],
     exclude_binaries=True,
+    # The executable keeps the unspaced name — it is an identifier, and it is
+    # what CFBundleExecutable and the Windows Run key point at. The bundle
+    # around it is what people read.
     name="BackgroundAssistant",
     debug=False,
     strip=False,
@@ -89,17 +92,19 @@ coll = COLLECT(
 if sys.platform == "darwin":
     app = BUNDLE(
         coll,
-        name="BackgroundAssistant.app",
+        name="Background Assistant.app",
         icon=str(ROOT / "assets" / "icon.icns"),
         bundle_identifier="com.edmartin.backgroundassistant",
         version=__version__,
         info_plist={
+            "CFBundleName": "Background Assistant",
+            "CFBundleDisplayName": "Background Assistant",
             "LSUIElement": True,            # menu-bar only, no Dock icon
             "LSMinimumSystemVersion": "13.0",
             "NSHighResolutionCapable": True,
             "CFBundleShortVersionString": __version__,
             "NSMicrophoneUsageDescription":
-                "BackgroundAssistant listens for your trigger word so it can "
+                "Background Assistant listens for your trigger word so it can "
                 "answer questions out loud. Only the exchanges you trigger are "
                 "kept, in a conversation history you can read and delete at any "
                 "time. Nothing else you say is stored.",

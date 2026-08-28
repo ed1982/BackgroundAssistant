@@ -1,5 +1,5 @@
 ; Inno Setup script — per-user install, no administrator rights (§8.2).
-#define AppName "BackgroundAssistant"
+#define AppName "Background Assistant"
 #define AppVersion "0.2.0"
 #define AppPublisher "Ed Martin"
 #define AppExe "BackgroundAssistant.exe"
@@ -38,10 +38,10 @@ Name: "startup"; Description: "Start {#AppName} when I sign in"; \
     GroupDescription: "Startup:"
 
 [Registry]
-; Launch at login (D13). The app also writes this key itself when the
-; Preferences checkbox is used, so the two agree.
+; Launch at login (D13). The value name is the unspaced identifier, matching
+; what bgassist/platform/login_item.py writes, so the two agree.
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
-    ValueType: string; ValueName: "{#AppName}"; ValueData: """{app}\{#AppExe}"""; \
+    ValueType: string; ValueName: "BackgroundAssistant"; ValueData: """{app}\{#AppExe}"""; \
     Flags: uninsdeletevalue; Tasks: startup
 
 [Run]

@@ -1,1 +1,1 @@
-"""platform subpackage of BackgroundAssistant."""
+"""platform subpackage of Background Assistant."""

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run BackgroundAssistant from a source checkout.
+"""Run Background Assistant from a source checkout.
 
 The real entry point is ``bgassist.cli``; this file exists so ``python main.py``
 keeps working for anyone used to it.

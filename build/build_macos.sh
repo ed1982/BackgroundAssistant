@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build BackgroundAssistant.app and a drag-to-install DMG.
+# Build "Background Assistant.app" and a drag-to-install DMG.
 #
 #   build/build_macos.sh                 build, ad-hoc sign, make the DMG
 #   build/build_macos.sh --notarize      also submit to notarytool and staple
@@ -11,7 +11,8 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
-APP="dist/BackgroundAssistant.app"
+# Displayed name, so it has a space in it: quote every use.
+APP="dist/Background Assistant.app"
 DMG="dist/BackgroundAssistant.dmg"
 STAGE="build/dmg-stage"
 IDENTITY="${CODESIGN_IDENTITY:--}"          # "-" is ad-hoc
@@ -77,7 +78,7 @@ echo "==> PyInstaller"
 # A mounted disk image keeps a handle on its own backing file, and hdiutil
 # refuses to overwrite a volume that is currently attached — so let go of the
 # last build's DMG before deleting and rebuilding it.
-hdiutil detach "/Volumes/BackgroundAssistant" -quiet 2>/dev/null || true
+hdiutil detach "/Volumes/Background Assistant" -quiet 2>/dev/null || true
 clean_dir build/work
 clean_dir dist
 "$PY" -m PyInstaller --clean --noconfirm --workpath build/work --distpath dist \
@@ -109,10 +110,10 @@ rm -f "$DMG"
 made_dmg=0
 if command -v create-dmg >/dev/null 2>&1; then
   if create-dmg \
-      --volname "BackgroundAssistant" \
+      --volname "Background Assistant" \
       --window-size 560 380 \
       --icon-size 96 \
-      --icon "BackgroundAssistant.app" 140 180 \
+      --icon "Background Assistant.app" 140 180 \
       --app-drop-link 400 180 \
       --add-file "Read Me First.txt" build/READ_ME_FIRST.txt 280 320 \
       "$DMG" "$APP"; then
@@ -124,13 +125,13 @@ fi
 if [[ $made_dmg -eq 0 ]]; then
   # hdiutil is always present, needs no Homebrew, and still gives the
   # drag-to-Applications layout that matters.
-  hdiutil detach "/Volumes/BackgroundAssistant" -quiet 2>/dev/null || true
+  hdiutil detach "/Volumes/Background Assistant" -quiet 2>/dev/null || true
   clean_dir "$STAGE"
   mkdir -p "$STAGE"
   cp -R "$APP" "$STAGE/"
   ln -s /Applications "$STAGE/Applications"
   cp build/READ_ME_FIRST.txt "$STAGE/Read Me First.txt"
-  hdiutil create -volname "BackgroundAssistant" -srcfolder "$STAGE" \
+  hdiutil create -volname "Background Assistant" -srcfolder "$STAGE" \
       -ov -format UDZO -quiet "$DMG"
   clean_dir "$STAGE"
 fi

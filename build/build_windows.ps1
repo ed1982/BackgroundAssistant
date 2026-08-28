@@ -1,4 +1,4 @@
-# Build BackgroundAssistant for Windows (Phase 7).
+# Build Background Assistant for Windows (Phase 7).
 #
 #   powershell -ExecutionPolicy Bypass -File build\build_windows.ps1
 #

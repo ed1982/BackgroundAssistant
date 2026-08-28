@@ -1,1 +1,1 @@
-"""ui subpackage of BackgroundAssistant."""
+"""ui subpackage of Background Assistant."""

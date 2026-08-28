@@ -361,3 +361,10 @@ def test_the_key_field_explains_the_keychain_prompt():
     Always Allow is the right answer."""
     script = _read("prefs.js")
     assert "Always Allow" in script
+
+
+def test_the_window_title_matches_the_app_name():
+    """The page title is what the window shows before Qt sets its own."""
+    from bgassist import APP_NAME
+
+    assert f"<title>{APP_NAME}</title>" in _read("chat.html")

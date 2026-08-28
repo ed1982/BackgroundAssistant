@@ -1,4 +1,4 @@
-# BackgroundAssistant — design and rationale
+# Background Assistant — design and rationale
 
 **What this is:** the reasoning behind the way the app is built. It was written
 as a plan, and it was implemented; it is kept because the *why* of a decision is
@@ -28,7 +28,7 @@ an engine without a car. This is the car.
 
 | | Before | Now |
 |---|---|---|
-| Install | clone, venv, pip, edit JSON, edit `~/.zshrc` | drag `BackgroundAssistant.app` to Applications |
+| Install | clone, venv, pip, edit JSON, edit `~/.zshrc` | drag `Background Assistant.app` to Applications |
 | API key | `export OPENAI_API_KEY` in a shell the app never sees | Preferences → Keychain |
 | Provider | edit `config.json`, restart | dropdown, with "Test connection" |
 | Responses | spoken, then gone | spoken, plus a searchable chat window |
@@ -633,7 +633,7 @@ restrained accent colour. The 🖖 appears next to the trigger word wherever it 
 
 - **PyInstaller** (better maintained than py2app for Qt + native extensions) → `.app`, onedir.
 - `Info.plist`: `LSUIElement = true` (menu bar only, no Dock icon), `NSMicrophoneUsageDescription`
-  ("BackgroundAssistant listens for your trigger word so it can answer questions."),
+  ("Background Assistant listens for your trigger word so it can answer questions."),
   `CFBundleIdentifier = com.edmartin.backgroundassistant`, `LSMinimumSystemVersion = 13.0`
   (needed for `SMAppService`).
 - Entitlements — QtWebEngine's Chromium needs JIT under hardened runtime:

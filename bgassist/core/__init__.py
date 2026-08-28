@@ -1,1 +1,1 @@
-"""core subpackage of BackgroundAssistant."""
+"""core subpackage of Background Assistant."""

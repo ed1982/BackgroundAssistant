@@ -1,1 +1,1 @@
-"""stt subpackage of BackgroundAssistant."""
+"""stt subpackage of Background Assistant."""

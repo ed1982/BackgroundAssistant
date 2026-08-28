@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from bgassist import APP_NAME
+from bgassist import APP_ID_NAME, BUNDLE_ID
 
 log = logging.getLogger("bgassist.platform.login_item")
 
@@ -51,8 +51,8 @@ def _macos_set(enabled: bool) -> bool:
 
 
 def _agent_plist() -> Path:
-    return (Path.home() / "Library" / "LaunchAgents" /
-            f"com.edmartin.{APP_NAME.lower()}.plist")
+    # The bundle id, not a name with a space in it.
+    return Path.home() / "Library" / "LaunchAgents" / f"{BUNDLE_ID}.plist"
 
 
 def _launch_agent_set(enabled: bool) -> bool:
@@ -79,7 +79,7 @@ def _launch_agent_set(enabled: bool) -> bool:
   "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key><string>com.edmartin.{APP_NAME.lower()}</string>
+  <key>Label</key><string>{BUNDLE_ID}</string>
   <key>ProgramArguments</key><array><string>{program}</string></array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><false/>
@@ -105,10 +105,10 @@ def _windows_set(enabled: bool) -> bool:
                     log.warning("running from source: launch at login needs a "
                                 "built executable")
                     return False
-                winreg.SetValueEx(key, APP_NAME, 0, winreg.REG_SZ, f'"{target}"')
+                winreg.SetValueEx(key, APP_ID_NAME, 0, winreg.REG_SZ, f'"{target}"')
             else:
                 try:
-                    winreg.DeleteValue(key, APP_NAME)
+                    winreg.DeleteValue(key, APP_ID_NAME)
                 except FileNotFoundError:
                     pass
         return True
@@ -141,7 +141,7 @@ def is_enabled() -> bool:
             import winreg  # type: ignore
 
             with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _RUN_KEY) as key:
-                winreg.QueryValueEx(key, APP_NAME)
+                winreg.QueryValueEx(key, APP_ID_NAME)
             return True
         except Exception:  # noqa: BLE001
             return False

@@ -1,7 +1,7 @@
-BackgroundAssistant
-===================
+Background Assistant
+====================
 
-1. Drag BackgroundAssistant to your Applications folder.
+1. Drag Background Assistant to your Applications folder.
 
 2. The first time you open it, macOS will say it cannot check the app for
    malicious software. That is because this build is not signed with a paid

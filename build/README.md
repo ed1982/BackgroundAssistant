@@ -1,7 +1,7 @@
 # Build
 
 Everything here produces an installable app from a source checkout. Nothing in
-this directory is needed to *run* BackgroundAssistant from source — that is
+this directory is needed to *run* Background Assistant from source — that is
 just `python main.py`.
 
 ## macOS (arm64)

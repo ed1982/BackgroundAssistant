@@ -1,5 +1,9 @@
 """Per-OS locations for settings, logs, data and models.
 
+These use ``APP_ID_NAME``, not the display name: what the app is called in
+Finder can change, and a rename must not leave somebody's settings and
+conversations behind in a folder nothing looks in any more.
+
 Everything the app writes lives outside the code directory: an installed
 ``.app`` bundle is read-only and signed, so writing next to the source (as the
 old ``config.json`` / ``starcop.log`` did) breaks both packaging and signing.
@@ -15,29 +19,29 @@ import os
 import sys
 from pathlib import Path
 
-from bgassist import APP_NAME
+from bgassist import APP_ID_NAME
 
 _ENV_OVERRIDE = "BGASSIST_HOME"
 
 
 def _fallback_data_dir() -> Path:
     if sys.platform == "darwin":
-        return Path.home() / "Library" / "Application Support" / APP_NAME
+        return Path.home() / "Library" / "Application Support" / APP_ID_NAME
     if os.name == "nt":
         base = os.environ.get("APPDATA") or str(Path.home() / "AppData" / "Roaming")
-        return Path(base) / APP_NAME
+        return Path(base) / APP_ID_NAME
     base = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
-    return Path(base) / APP_NAME
+    return Path(base) / APP_ID_NAME
 
 
 def _fallback_log_dir() -> Path:
     if sys.platform == "darwin":
-        return Path.home() / "Library" / "Logs" / APP_NAME
+        return Path.home() / "Library" / "Logs" / APP_ID_NAME
     if os.name == "nt":
         base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
-        return Path(base) / APP_NAME / "logs"
+        return Path(base) / APP_ID_NAME / "logs"
     base = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
-    return Path(base) / APP_NAME / "logs"
+    return Path(base) / APP_ID_NAME / "logs"
 
 
 def _root() -> Path:
@@ -48,7 +52,7 @@ def _root() -> Path:
     try:
         import platformdirs
 
-        return Path(platformdirs.user_data_dir(APP_NAME, appauthor=False))
+        return Path(platformdirs.user_data_dir(APP_ID_NAME, appauthor=False))
     except Exception:  # noqa: BLE001 - missing/odd platformdirs must not stop start-up
         return _fallback_data_dir()
 
@@ -76,7 +80,7 @@ def log_dir() -> Path:
     try:
         import platformdirs
 
-        return _ensure(Path(platformdirs.user_log_dir(APP_NAME, appauthor=False)))
+        return _ensure(Path(platformdirs.user_log_dir(APP_ID_NAME, appauthor=False)))
     except Exception:  # noqa: BLE001
         return _ensure(_fallback_log_dir())
 

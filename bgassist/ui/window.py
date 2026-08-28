@@ -9,6 +9,8 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from bgassist import APP_NAME
+
 log = logging.getLogger("bgassist.ui.window")
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
@@ -18,7 +20,7 @@ class WebWindow:
     """A QMainWindow wrapping one page. Hidden until something opens it (D9)."""
 
     page = "chat.html"
-    title = "BackgroundAssistant"
+    title = APP_NAME
     default_size = (960, 680)
     minimum_size = (480, 420)
 

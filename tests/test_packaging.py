@@ -203,3 +203,55 @@ def test_the_microphone_prompt_promises_what_the_app_actually_does():
         assert phrase in prompt, phrase
     # The bundle built by PyInstaller must say the same thing.
     assert "Only the exchanges you trigger are" in read("backgroundassistant.spec")
+
+
+# -- the display name and the identity are different things ---------------
+
+def test_the_bundle_is_named_for_people_and_identified_for_machines():
+    """Finder shows "Background Assistant"; CFBundleExecutable, the support
+    folder and the Windows Run key keep the unspaced identifier."""
+    spec = read("backgroundassistant.spec")
+    assert 'name="Background Assistant.app"' in spec
+    assert 'name="BackgroundAssistant",' in spec        # the executable
+    assert '"CFBundleName": "Background Assistant"' in spec
+    assert '"CFBundleDisplayName": "Background Assistant"' in spec
+
+
+def test_the_plist_template_agrees_with_the_spec():
+    template = read("Info.plist.template").replace("__VERSION__", "1.0")
+    data = plistlib.loads(template.encode())
+    assert data["CFBundleName"] == "Background Assistant"
+    assert data["CFBundleDisplayName"] == "Background Assistant"
+    assert data["CFBundleExecutable"] == "BackgroundAssistant"
+    assert data["CFBundleIdentifier"] == "com.edmartin.backgroundassistant"
+
+
+def test_the_build_script_quotes_a_path_with_a_space_in_it():
+    """The bundle is "Background Assistant.app" now. An unquoted $APP would
+    split on the space and the build would fail somewhere confusing."""
+    script = read("build_macos.sh")
+    assert 'APP="dist/Background Assistant.app"' in script
+    quoted = re.compile(r'"[^"]*"')
+    for line in script.splitlines():
+        if "$APP" not in line or line.strip().startswith("#"):
+            continue
+        # Remove every double-quoted span; a $APP surviving that is bare.
+        assert "$APP" not in quoted.sub("", line), line
+
+
+def test_the_disk_image_is_labelled_for_people():
+    script = read("build_macos.sh")
+    assert '-volname "Background Assistant"' in script
+    assert script.count('"/Volumes/Background Assistant"') >= 2
+
+
+def test_the_windows_run_key_uses_the_identifier_not_the_display_name():
+    """A value name with a space would not match what login_item.py writes."""
+    installer = read("installer.iss")
+    assert 'ValueName: "BackgroundAssistant"' in installer
+    assert '#define AppName "Background Assistant"' in installer
+
+
+def test_the_launcher_is_named_after_the_app():
+    assert (ROOT / "Build Background Assistant.command").exists()
+    assert not (ROOT / "Build BackgroundAssistant.command").exists()

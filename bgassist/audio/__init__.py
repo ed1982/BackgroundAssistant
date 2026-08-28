@@ -1,1 +1,1 @@
-"""audio subpackage of BackgroundAssistant."""
+"""audio subpackage of Background Assistant."""
