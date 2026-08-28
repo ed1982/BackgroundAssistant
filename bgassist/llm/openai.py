@@ -48,7 +48,7 @@ class OpenAICompatibleBackend(HttpBackend):
                marked_utterance: str = "") -> Iterator[str]:
         url = f"{self.base_url}/chat/completions"
         payload = self._payload(context_text, query, history, marked_utterance, True)
-        response = self._request(url, payload, stream=True)
+        response = self._request_adapting(url, payload, stream=True)
         for event in self._iter_sse(response, cancel):
             try:
                 delta = event["choices"][0].get("delta") or {}

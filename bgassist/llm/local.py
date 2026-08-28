@@ -49,7 +49,7 @@ class OllamaBackend(HttpBackend):
         """Ollama streams newline-delimited JSON rather than SSE."""
         url = f"{self.base_url}/api/chat"
         payload = self._payload(context_text, query, history, marked_utterance, True)
-        response = self._request(url, payload, stream=True)
+        response = self._request_adapting(url, payload, stream=True)
         try:
             for raw in response:
                 if cancel is not None and cancel.is_set():

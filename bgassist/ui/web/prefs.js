@@ -169,8 +169,14 @@
       var data = JSON.parse(json);
       if (data.ok) {
         result.className = "result ok";
-        result.textContent = "Connected to " + data.model + " in " +
-          data.latency_ms + " ms — it replied “" + (data.reply || "") + "”.";
+        var text = "Connected to " + data.model + " in " + data.latency_ms +
+          " ms — it replied “" + (data.reply || "") + "”.";
+        if (data.ignored && data.ignored.length) {
+          // Newer models accept only the default temperature, so say so
+          // rather than leaving a control that quietly does nothing.
+          text += " This model ignores: " + data.ignored.join(", ") + ".";
+        }
+        result.textContent = text;
       } else {
         result.className = "result error";
         result.textContent = data.error;

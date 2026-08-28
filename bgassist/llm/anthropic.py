@@ -53,7 +53,7 @@ class AnthropicBackend(HttpBackend):
                marked_utterance: str = "") -> Iterator[str]:
         url = f"{self.base_url}/messages"
         payload = self._payload(context_text, query, history, marked_utterance, True)
-        response = self._request(url, payload, stream=True)
+        response = self._request_adapting(url, payload, stream=True)
         for event in self._iter_sse(response, cancel):
             if event.get("type") != "content_block_delta":
                 continue

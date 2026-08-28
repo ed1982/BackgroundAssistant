@@ -215,3 +215,122 @@ def test_the_system_prompt_from_settings_reaches_the_backend():
                                        model="m", timeout_s=5),
                        api_key="k", system_prompt="be terse")
     assert backend.system_prompt == "be terse"
+
+
+# -- adapting to what a provider will actually accept ---------------------
+
+class _FussyHandler(_Handler):
+    """Refuses one named parameter the way OpenAI does, then answers."""
+
+    refuse = "temperature"
+    seen: list = []
+
+    def do_POST(self):
+        length = int(self.headers.get("Content-Length", 0))
+        body = json.loads(self.rfile.read(length) or b"{}")
+        type(self).seen.append(body)
+        if self.refuse and self.refuse in body:
+            payload = {"error": {
+                "message": f"Unsupported value: '{self.refuse}' does not support "
+                           f"{body[self.refuse]} with this model. Only the default "
+                           f"(1) value is supported.",
+                "type": "invalid_request_error",
+                "param": self.refuse,
+                "code": "unsupported_value"}}
+            data = json.dumps(payload).encode()
+            self.send_response(400)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
+        data = json.dumps(
+            {"choices": [{"message": {"content": "All systems nominal."}}]}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+
+@pytest.fixture()
+def fussy():
+    _FussyHandler.seen = []
+    _FussyHandler.refuse = "temperature"
+    srv = HTTPServer(("127.0.0.1", 0), _FussyHandler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    srv.base = f"http://127.0.0.1:{srv.server_address[1]}/v1"
+    yield srv
+    srv.shutdown()
+
+
+def _backend(base, **kwargs):
+    from bgassist.llm.openai import OpenAICompatibleBackend
+
+    return OpenAICompatibleBackend(base_url=base, model="gpt-5-mini",
+                                   api_key="k", timeout_s=5, **kwargs)
+
+
+def test_a_refused_temperature_is_dropped_and_the_question_still_answered(fussy):
+    """Newer OpenAI models accept only the default temperature. Refusing to
+    answer over a preference is the wrong trade."""
+    backend = _backend(fussy.base)
+    assert backend.ask("", "status") == "All systems nominal."
+    assert "temperature" in _FussyHandler.seen[0]
+    assert "temperature" not in _FussyHandler.seen[1]
+
+
+def test_the_lesson_is_remembered_for_later_requests(fussy):
+    backend = _backend(fussy.base)
+    backend.ask("", "first")
+    before = len(_FussyHandler.seen)
+    backend.ask("", "second")
+    # One request, not two: we no longer send what we know will be refused.
+    assert len(_FussyHandler.seen) == before + 1
+    assert "temperature" not in _FussyHandler.seen[-1]
+
+
+def test_a_refused_token_limit_is_renamed_rather_than_abandoned(fussy):
+    """Servers predating max_completion_tokens want the older spelling; the
+    cap is worth keeping."""
+    _FussyHandler.refuse = "max_completion_tokens"
+    backend = _backend(fussy.base)
+    assert backend.ask("", "status") == "All systems nominal."
+    assert "max_completion_tokens" in _FussyHandler.seen[0]
+    assert _FussyHandler.seen[1]["max_tokens"] == _FussyHandler.seen[0][
+        "max_completion_tokens"]
+
+
+def test_streaming_adapts_before_the_first_token(fussy):
+    backend = _backend(fussy.base)
+    # The fussy server answers non-streaming JSON, which the SSE reader simply
+    # finds no events in — what matters is that it got past the 400.
+    list(backend.stream("", "status"))
+    assert "temperature" not in _FussyHandler.seen[-1]
+
+
+def test_a_refusal_we_cannot_answer_is_still_an_error(fussy):
+    """Dropping 'model' would be nonsense, so that one is reported."""
+    _FussyHandler.refuse = "model"
+    backend = _backend(fussy.base)
+    with pytest.raises(LLMError):
+        backend.ask("", "status")
+    assert len(_FussyHandler.seen) == 1  # no retry storm
+
+
+def test_the_error_carries_the_status_and_body(server):
+    from bgassist.llm.base import LLMHttpError
+
+    _Handler.status = 429
+    backend = OllamaBackend(base_url=server.base, timeout_s=5)
+    with pytest.raises(LLMHttpError) as exc:
+        backend.ask("", "hi")
+    assert exc.value.status == 429
+
+
+def test_the_connection_test_reports_what_the_model_ignored(fussy):
+    """A control that quietly does nothing is worse than one that says so."""
+    backend = _backend(fussy.base)
+    result = backend.test_connection()
+    assert result["ok"] is True
+    assert result["ignored"] == ["temperature"]
