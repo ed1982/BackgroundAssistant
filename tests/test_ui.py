@@ -313,3 +313,18 @@ def test_a_year_is_not_a_numbered_list():
     source = _read("vendor/markdown.js")
     assert "\\d{1,2}[.)]" in source
     assert "\\d+[.)]" not in source
+
+
+def test_the_voice_tab_says_where_better_voices_come_from():
+    """The system voices are dated, and nothing in macOS tells you that the
+    good ones are a download away."""
+    page, script = _read("prefs.html"), _read("prefs.js")
+    assert 'id="voice-hint"' in page
+    assert "Manage Voices" in script
+    assert "Enhanced" in script and "Premium" in script
+    # macOS-specific advice, shown only there.
+    assert 'meta.platform !== "darwin"' in script
+
+
+def test_the_bridge_reports_the_platform_for_platform_specific_advice(bridge):
+    assert bridge.get_settings()["_meta"]["platform"]

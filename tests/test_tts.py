@@ -192,3 +192,68 @@ def test_pyttsx3_init_failure_raises(monkeypatch):
     monkeypatch.setitem(sys.modules, "pyttsx3", fake_mod)
     with pytest.raises(TtsError):
         Pyttsx3Tts(rate=150)
+
+
+# -- the voice picker ------------------------------------------------------
+
+SAY_OUTPUT = """Albert                  en_US    # Hello! My name is Albert.
+Alex                    en_US    # Most people recognize me by my voice.
+Ava (Premium)           en_US    # Hello, my name is Ava.
+Daniel (Enhanced)       en_GB    # Hello, my name is Daniel.
+Eddy (English (UK))     en_GB    # Hello! My name is Eddy.
+Eddy (English (US))     en_US    # Hello! My name is Eddy.
+Eddy (Finnish (Finland)) fi_FI   # Moi! Nimeni on Eddy.
+Eddy (French (France))  fr_FR    # Bonjour, je m'appelle Eddy.
+Tessa                   en_ZA    # Hello! My name is Tessa.
+Thomas                  fr_FR    # Bonjour, je m'appelle Thomas.
+"""
+
+
+@pytest.fixture()
+def catalogue(monkeypatch):
+    monkeypatch.setattr(SayTts, "_catalogue",
+                        SayTts.parse_voice_list(SAY_OUTPUT))
+    monkeypatch.setattr(SayTts, "_voice_cache", None)
+    yield
+    SayTts._catalogue = None
+    SayTts._voice_cache = None
+
+
+def test_a_voice_name_is_not_its_first_word(catalogue):
+    """macOS lists one line per locale, and the name itself contains spaces
+    and brackets. Taking the first token turned fourteen Eddys into fourteen
+    identical rows, which reads as a bug rather than as choice."""
+    names = SayTts.available_voices(language="en")
+    assert "Eddy (English (UK))" in names
+    assert "Eddy (English (US))" in names
+    assert "Eddy" not in names
+    assert len(names) == len(set(names))
+
+
+def test_the_picker_is_filtered_to_the_language_in_use(catalogue):
+    english = SayTts.available_voices(language="en")
+    assert "Eddy (Finnish (Finland))" not in english
+    assert "Thomas" not in english
+    assert SayTts.available_voices(language="fr") == \
+        ["Eddy (French (France))", "Thomas"]
+
+
+def test_the_good_voices_come_first(catalogue):
+    """Premium and Enhanced are the ones worth having, so they are not buried
+    halfway down an alphabetical list."""
+    names = SayTts.available_voices(language="en")
+    assert names[:2] == ["Ava (Premium)", "Daniel (Enhanced)"]
+
+
+def test_an_unknown_language_shows_everything_rather_than_nothing(catalogue):
+    assert SayTts.available_voices(language="xx")
+
+
+def test_a_bare_name_still_finds_its_qualified_voice(catalogue):
+    assert SayTts.resolve_voice("Daniel") == "Daniel (Enhanced)"
+    assert SayTts.resolve_voice("Tessa") == "Tessa"
+
+
+def test_an_unfamiliar_line_format_does_not_lose_the_voice():
+    voices = SayTts.parse_voice_list("Whisper  # something unexpected\n")
+    assert [v.name for v in voices] == ["Whisper"]

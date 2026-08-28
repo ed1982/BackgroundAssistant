@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
 import time
 from typing import Any, Dict, List, Optional
 
@@ -151,7 +152,8 @@ class BridgeCore:
         from bgassist.settings.secrets import display_stub
         from bgassist.storage.crypto import encryption_status
 
-        data = self.app.settings.to_dict()
+        settings = self.app.settings
+        data = settings.to_dict()
         accounts = {name: preset["keyring_account"]
                     for name, preset in PRESETS.items()}
         data["_meta"] = {
@@ -160,7 +162,7 @@ class BridgeCore:
                      for name, account in accounts.items()},
             "keychain_available": self.app.secrets.available,
             "encryption": encryption_status(self.app.conversations.cipher),
-            "voices": _voices(),
+            "voices": _voices(settings.listening.language),
             "input_devices": _devices("input"),
             "output_devices": _devices("output"),
             "whisper_models": list(_whisper_models()),
@@ -169,6 +171,8 @@ class BridgeCore:
             "version": __version__,
             "counts": self.app.conversations.count(),
             "login_item_supported": _login_item_supported(),
+            # The Voice tab's advice is macOS-specific.
+            "platform": sys.platform,
         }
         return data
 
@@ -317,11 +321,11 @@ def _relative(ts: float, now: Optional[float] = None) -> str:
     return time.strftime("%d %b", time.localtime(ts))
 
 
-def _voices() -> List[str]:
+def _voices(language: Optional[str] = None) -> List[str]:
     try:
         from bgassist.tts import available_voices
 
-        return available_voices()
+        return available_voices(language=language)
     except Exception:  # noqa: BLE001
         return []
 

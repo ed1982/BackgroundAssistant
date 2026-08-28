@@ -7,8 +7,10 @@ from __future__ import annotations
 
 import logging
 import queue
+import re
 import subprocess
 import threading
+from dataclasses import dataclass
 from typing import List, Optional
 
 from bgassist.tts.base import TtsError
@@ -25,6 +27,43 @@ log = logging.getLogger("bgassist.tts.system")
 #: good ones and are meant to be used this way.
 PREFERRED_VOICES = ("Tessa", "Serena", "Fiona", "Moira", "Daniel", "Karen",
                     "Samantha", "Ava")
+
+#: A line of `say -v ?` is "<name>  <locale>  # <sample sentence>", where the
+#: name may itself contain spaces and brackets:
+#:
+#:     Alex                     en_US    # Most people recognize me by my voice.
+#:     Eddy (English (UK))      en_GB    # Hello! My name is Eddy.
+#:     Ava (Premium)            en_US    # Hello, my name is Ava.
+#:
+#: Taking the first whitespace-delimited token — which is what this used to do
+#: — turns every one of the fourteen Eddys into "Eddy", and the picker looks
+#: broken.
+_VOICE_LINE = re.compile(r"^(?P<name>.+?)\s+(?P<locale>[a-z]{2,3}[-_][A-Z]{2})"
+                         r"(?:\s+#\s*(?P<sample>.*))?$")
+
+
+@dataclass(frozen=True)
+class Voice:
+    name: str            # what `say -v` wants, brackets and all
+    locale: str = ""     # en_GB, fr_FR…
+    sample: str = ""
+
+    @property
+    def language(self) -> str:
+        return self.locale.split("_")[0].split("-")[0].lower()
+
+    @property
+    def bare_name(self) -> str:
+        """"Eddy (English (UK))" -> "Eddy"."""
+        return self.name.split("(")[0].strip()
+
+    @property
+    def quality(self) -> str:
+        lowered = self.name.lower()
+        for tier in ("premium", "enhanced"):
+            if tier in lowered:
+                return tier
+        return "default"
 
 
 class SayTts:
@@ -53,6 +92,10 @@ class SayTts:
         if not installed:  # `say -v ?` unavailable: let `say` decide
             return voice
         lookup = {name.lower(): name for name in installed}
+        # "Tessa" should still find "Tessa (Enhanced)" if that is what is
+        # installed, so bare names resolve too.
+        for name in installed:
+            lookup.setdefault(name.split("(")[0].strip().lower(), name)
         if voice:
             found = lookup.get(voice.strip().lower())
             if found:
@@ -94,24 +137,72 @@ class SayTts:
     #: enough to pay for that each time.
     _voice_cache: Optional[List[str]] = None
 
+    @staticmethod
+    def parse_voice_list(text: str) -> List["Voice"]:
+        voices: List[Voice] = []
+        for line in text.splitlines():
+            line = line.rstrip()
+            if not line.strip():
+                continue
+            match = _VOICE_LINE.match(line)
+            if match:
+                voices.append(Voice(name=match.group("name").strip(),
+                                    locale=match.group("locale"),
+                                    sample=(match.group("sample") or "").strip()))
+            else:  # an unfamiliar format: keep the first token rather than
+                # dropping the voice entirely
+                voices.append(Voice(name=line.split()[0]))
+        return voices
+
     @classmethod
-    def available_voices(cls, refresh: bool = False) -> List[str]:
-        if cls._voice_cache is not None and not refresh:
-            return cls._voice_cache
-        voices: List[str] = []
+    def catalogue(cls, refresh: bool = False) -> List["Voice"]:
+        """Every installed voice, with its locale."""
+        if cls._catalogue is not None and not refresh:
+            return cls._catalogue
         try:
             out = subprocess.run(["say", "-v", "?"], capture_output=True,
                                  text=True, timeout=10)
-            for line in out.stdout.splitlines():
-                parts = line.split()
-                if parts:
-                    voices.append(parts[0])
+            voices = cls.parse_voice_list(out.stdout)
         except Exception:  # noqa: BLE001 - not being able to list voices is
             # not a reason to be unable to speak
             log.debug("could not list system voices", exc_info=True)
             voices = []
-        cls._voice_cache = voices
+        cls._catalogue = voices
         return voices
+
+    _catalogue: Optional[List["Voice"]] = None
+
+    @classmethod
+    def available_voices(cls, refresh: bool = False,
+                         language: Optional[str] = None) -> List[str]:
+        """Voice names for the picker: one entry per voice, no repeats.
+
+        Filtered to *language* when given, because macOS ships the same voice
+        in a dozen locales and a picker with fourteen identical "Eddy" rows
+        reads as a bug rather than as choice.
+        """
+        if cls._voice_cache is not None and not refresh and language is None:
+            return cls._voice_cache
+
+        catalogue = cls.catalogue(refresh=refresh)
+        wanted = (language or "").split("-")[0].split("_")[0].lower()
+        if wanted:
+            matching = [v for v in catalogue if v.language == wanted]
+            catalogue = matching or catalogue  # never leave the picker empty
+
+        # Premium and Enhanced first — they are the ones worth having — then
+        # alphabetically, and never the same name twice.
+        order = {"premium": 0, "enhanced": 1, "default": 2}
+        seen, names = set(), []
+        for voice in sorted(catalogue,
+                            key=lambda v: (order[v.quality], v.name.lower())):
+            if voice.name in seen:
+                continue
+            seen.add(voice.name)
+            names.append(voice.name)
+        if language is None:
+            cls._voice_cache = names
+        return names
 
 
 class Pyttsx3Tts:

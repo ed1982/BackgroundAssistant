@@ -62,8 +62,14 @@ def make_tts(cfg, platform: Optional[str] = None):
 
 
 def available_voices(engine: Optional[str] = None,
-                     platform: Optional[str] = None) -> List[str]:
-    """Voice names for the Preferences picker."""
+                     platform: Optional[str] = None,
+                     language: Optional[str] = None) -> List[str]:
+    """Voice names for the Preferences picker.
+
+    *language* narrows the list: macOS ships the same voice in a dozen
+    locales, and a picker showing fourteen identical "Eddy" rows reads as a
+    bug rather than as choice.
+    """
     system = platform or sys.platform
     engine = (engine or "auto").lower()
     if engine in ("auto", "piper"):
@@ -76,7 +82,7 @@ def available_voices(engine: Optional[str] = None,
         except Exception:  # noqa: BLE001 - no piper, no voices
             pass
     if system == "darwin":
-        return SayTts.available_voices()
+        return SayTts.available_voices(language=language)
     try:
         import pyttsx3
 

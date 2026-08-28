@@ -110,6 +110,17 @@
       var voices = (meta.voices || []).slice();
       if (!voices.length) voices = [""];
       options($("voice"), voices, settings.voice.voice || "");
+
+      var voiceHint = $("voice-hint");
+      voiceHint.hidden = meta.platform !== "darwin";
+      if (!voiceHint.hidden) {
+        voiceHint.textContent =
+          "Want a better voice? System Settings → Accessibility → Spoken " +
+          "Content → System Voice → Manage Voices, then download an Enhanced " +
+          "or Premium one — Serena, Daniel and Ava are good. It appears here " +
+          "straight away. (Siri's own voices can't be used by any app but " +
+          "Siri.)";
+      }
       var devices = ["Default"].concat(meta.input_devices || []);
       options($("input-device"), devices,
               settings.listening.input_device || "Default");
