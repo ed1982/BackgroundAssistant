@@ -40,23 +40,50 @@ clean_dir() {
   fi
 }
 
-# Always build with the project's own interpreter, not whatever `python3`
-# happens to mean in this shell.
-if [[ -x ".venv/bin/python" ]]; then
-  PY=".venv/bin/python"
-else
-  PY="$(command -v python3)"
-  echo "warning: no .venv found; building with $PY"
+# The whole build has to work from a fresh clone with nothing set up, because
+# the instruction is "double-click this" and anything else is a broken promise.
+# So: find a usable interpreter, make the venv, install what is missing.
+SUPPORTED_PYTHON=(python3.12 python3.11 python3.10 python3)
+
+find_interpreter() {
+  local candidate path
+  for candidate in "${SUPPORTED_PYTHON[@]}"; do
+    path="$(command -v "$candidate" 2>/dev/null)" || continue
+    if "$path" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] in ((3,10),(3,11),(3,12)) else 1)' 2>/dev/null; then
+      printf '%s' "$path"
+      return 0
+    fi
+  done
+  return 1
+}
+
+if [[ ! -x ".venv/bin/python" ]]; then
+  echo "==> First run: setting up .venv"
+  # macOS ships Python 3.9, which is too old, and its system interpreter
+  # refuses `pip install` anyway (externally managed).
+  if ! interpreter="$(find_interpreter)"; then
+    echo
+    echo "No suitable Python found. Background Assistant needs 3.10, 3.11 or 3.12."
+    echo "Install one and run this again:"
+    echo "    brew install python@3.12"
+    echo "or download it from https://www.python.org/downloads/"
+    exit 1
+  fi
+  echo "using $interpreter"
+  "$interpreter" -m venv .venv
 fi
+PY=".venv/bin/python"
 
 echo "==> Python"
 "$PY" -c 'import sys; print(sys.version); assert sys.version_info[:2] in ((3,10),(3,11),(3,12)), sys.version'
 "$PY" -c 'import platform; assert platform.machine() == "arm64", f"arm64 only: {platform.machine()}"'
 
-echo "==> Build tools"
-if ! "$PY" -c "import PyInstaller" 2>/dev/null; then
-  echo "installing pyinstaller into the venv"
-  "$PY" -m pip install --quiet --upgrade pyinstaller
+echo "==> Dependencies"
+REQUIRED="PySide6, faster_whisper, sounddevice, webrtcvad, keyring, cryptography, platformdirs, numpy, pytest, PyInstaller"
+if ! "$PY" -c "import $REQUIRED" 2>/dev/null; then
+  echo "installing what is missing — a few minutes, and only the first time"
+  "$PY" -m pip install --quiet --upgrade pip
+  "$PY" -m pip install -e ".[dev,macos,build]"
 fi
 "$PY" -c "import PyInstaller; print('pyinstaller', PyInstaller.__version__)"
 

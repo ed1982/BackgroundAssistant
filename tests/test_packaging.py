@@ -255,3 +255,17 @@ def test_the_windows_run_key_uses_the_identifier_not_the_display_name():
 def test_the_launcher_is_named_after_the_app():
     assert (ROOT / "Build Background Assistant.command").exists()
     assert not (ROOT / "Build BackgroundAssistant.command").exists()
+
+
+def test_the_build_works_from_a_fresh_clone():
+    """The instruction is "double-click this". Anything that needs a venv set
+    up first is a broken promise — and macOS's own Python is 3.9, too old, and
+    refuses pip install anyway."""
+    script = read("build_macos.sh")
+    assert "find_interpreter" in script
+    assert "python3.12" in script and "python3.10" in script
+    assert "-m venv .venv" in script
+    assert 'pip install -e ".[dev,macos,build]"' in script
+    # And it must fail helpfully rather than half-building.
+    assert "No suitable Python found" in script
+    assert "brew install python@3.12" in script

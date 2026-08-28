@@ -36,18 +36,22 @@ history you can read and delete at any time. Nothing else is kept.
 
 There is no download yet — it needs an Apple Developer certificate first, and
 without one macOS would refuse to open a DMG from the internet outright. So
-you build it, which takes one double-click and about five minutes:
+you build it, which is one double-click:
 
-1. Clone this repository, then run once:
-   `python3.12 -m venv .venv && source .venv/bin/activate && pip install -e '.[dev,macos]'`
-2. Double-click **`Build Background Assistant.command`** in Finder. Terminal
-   opens to show progress — there is nothing to type — and Finder opens on the
-   finished DMG. (Details and the shell equivalent: [`build/README.md`](build/README.md).)
-3. Open the DMG and drag the app onto **Applications**.
-4. **Right-click the app → Open → Open.** Once only. The build is signed
+1. Clone this repository and double-click **`Build Background Assistant.command`**.
+   Terminal opens to show progress; there is nothing to type. The first run
+   sets up its own environment and installs what it needs, so allow ten
+   minutes or so; after that it is about five. Finder opens on the finished
+   DMG. (Details and the shell equivalent: [`build/README.md`](build/README.md).)
+2. Open the DMG and drag the app onto **Applications**.
+3. **Right-click the app → Open → Open.** Once only. The build is signed
    ad-hoc rather than with a paid certificate, so macOS cannot check it and a
    plain double-click gets refused.
-5. Say **yes** to the microphone prompt.
+4. Say **yes** to the microphone prompt.
+
+You need Python 3.10, 3.11 or 3.12 — macOS ships 3.9, which is too old. If the
+build cannot find one it says so and stops, without changing anything:
+`brew install python@3.12`, or [python.org](https://www.python.org/downloads/).
 
 The icon appears in the **menu bar**, not the Dock. Open **Preferences → AI**,
 choose a provider, paste an API key — it goes into your Keychain, never a file
