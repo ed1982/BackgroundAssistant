@@ -34,13 +34,20 @@ history you can read and delete at any time. Nothing else is kept.
 
 ## Install
 
-1. Download **BackgroundAssistant.dmg** from
-   [Releases](../../releases), or build it yourself: double-click
-   `Build Background Assistant.command`.
-2. Open the DMG and drag the app onto **Applications**.
-3. **Right-click the app → Open → Open.** Once only — the build is not signed
-   with a paid Apple certificate, so a plain double-click gets refused.
-4. Say **yes** to the microphone prompt.
+There is no download yet — it needs an Apple Developer certificate first, and
+without one macOS would refuse to open a DMG from the internet outright. So
+you build it, which takes one double-click and about five minutes:
+
+1. Clone this repository, then run once:
+   `python3.12 -m venv .venv && source .venv/bin/activate && pip install -e '.[dev,macos]'`
+2. Double-click **`Build Background Assistant.command`** in Finder. Terminal
+   opens to show progress — there is nothing to type — and Finder opens on the
+   finished DMG. (Details and the shell equivalent: [`build/README.md`](build/README.md).)
+3. Open the DMG and drag the app onto **Applications**.
+4. **Right-click the app → Open → Open.** Once only. The build is signed
+   ad-hoc rather than with a paid certificate, so macOS cannot check it and a
+   plain double-click gets refused.
+5. Say **yes** to the microphone prompt.
 
 The icon appears in the **menu bar**, not the Dock. Open **Preferences → AI**,
 choose a provider, paste an API key — it goes into your Keychain, never a file

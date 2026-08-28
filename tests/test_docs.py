@@ -65,8 +65,10 @@ def test_the_readme_leads_with_what_the_thing_is_for():
     opening = readme[:1200]
     assert "It already heard the question." in opening
     assert "Install" in readme
-    # The install path a person actually takes, near the top.
-    assert readme.index("BackgroundAssistant.dmg") < len(readme) // 3
+    # The install path a person actually takes, near the top. It points at
+    # building the app, because there is no signed download to point at yet.
+    assert readme.index("## Install") < len(readme) // 3
+    assert "Build Background Assistant.command" in readme
 
 
 def test_the_readme_is_honest_about_what_is_stored():
