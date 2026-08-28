@@ -40,3 +40,8 @@ assets/tray/
 assets/*.png
 assets/*.ico
 assets/*.icns
+
+# Build output
+build/work/
+build/build.log
+build/dmg-stage/

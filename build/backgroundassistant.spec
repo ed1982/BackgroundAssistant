@@ -1,6 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
 """PyInstaller spec for BackgroundAssistant (macOS and Windows).
 
+Written for PyInstaller 6: no cipher, no ``a.zipfiles``, ``PYZ(a.pure)``.
+
 onedir rather than onefile: a one-file bundle unpacks ~500 MB to a temporary
 directory on every launch, which is unusable for something that starts at
 login. arm64 only on macOS — universal2 would need universal wheels for
@@ -9,7 +11,7 @@ ctranslate2 and onnxruntime, which are not reliably available (§8.1).
 import sys
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_all, collect_data_files
+from PyInstaller.utils.hooks import collect_all
 
 ROOT = Path(SPECPATH).resolve().parent
 sys.path.insert(0, str(ROOT))
@@ -49,8 +51,6 @@ voices = ROOT / "assets" / "voices"
 if voices.is_dir():
     datas.append((str(voices), "assets/voices"))
 
-block_cipher = None
-
 a = Analysis(
     [str(ROOT / "main.py")],
     pathex=[str(ROOT)],
@@ -59,11 +59,12 @@ a = Analysis(
     hiddenimports=hiddenimports,
     hookspath=[],
     runtime_hooks=[],
-    excludes=["tkinter", "matplotlib", "pytest", "PySide6.QtQuick3D",
-              "PySide6.Qt3DCore", "PySide6.QtCharts", "PySide6.QtDataVisualization"],
-    cipher=block_cipher,
+    # Only obviously-unused third-party trees. Excluding PySide6 submodules
+    # by name interferes with its own hook's collection, which is not worth
+    # the megabytes it would save.
+    excludes=["tkinter", "matplotlib", "pytest", "IPython", "notebook"],
 )
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+pyz = PYZ(a.pure)
 
 exe = EXE(
     pyz, a.scripts, [],
@@ -79,7 +80,7 @@ exe = EXE(
 )
 
 coll = COLLECT(
-    exe, a.binaries, a.zipfiles, a.datas,
+    exe, a.binaries, a.datas,
     strip=False, upx=False, name="BackgroundAssistant",
 )
 

@@ -13,53 +13,98 @@ cd "$(dirname "$0")/.."
 ROOT="$PWD"
 APP="dist/BackgroundAssistant.app"
 DMG="dist/BackgroundAssistant.dmg"
+STAGE="build/dmg-stage"
 IDENTITY="${CODESIGN_IDENTITY:--}"          # "-" is ad-hoc
 NOTARIZE=0
 [[ "${1:-}" == "--notarize" ]] && NOTARIZE=1
 
+# Always build with the project's own interpreter, not whatever `python3`
+# happens to mean in this shell.
+if [[ -x ".venv/bin/python" ]]; then
+  PY=".venv/bin/python"
+else
+  PY="$(command -v python3)"
+  echo "warning: no .venv found; building with $PY"
+fi
+
 echo "==> Python"
-python3 -c 'import sys; assert sys.version_info[:2] in ((3,10),(3,11),(3,12)), sys.version'
+"$PY" -c 'import sys; print(sys.version); assert sys.version_info[:2] in ((3,10),(3,11),(3,12)), sys.version'
+"$PY" -c 'import platform; assert platform.machine() == "arm64", f"arm64 only: {platform.machine()}"'
+
+echo "==> Build tools"
+if ! "$PY" -c "import PyInstaller" 2>/dev/null; then
+  echo "installing pyinstaller into the venv"
+  "$PY" -m pip install --quiet --upgrade pyinstaller
+fi
+"$PY" -c "import PyInstaller; print('pyinstaller', PyInstaller.__version__)"
 
 echo "==> Icons"
-python3 tools/make_icons.py --out assets
+"$PY" tools/make_icons.py --out assets
+rm -f assets/icon.icns
 iconutil -c icns assets/icon.iconset -o assets/icon.icns
 
 echo "==> Tests"
-python3 -m pytest -q
+"$PY" -m pytest -q
 
 echo "==> Headless check"
-python3 main.py --check
+"$PY" main.py --check
 
 echo "==> PyInstaller"
 rm -rf build/work dist
-pyinstaller --clean --noconfirm --workpath build/work --distpath dist \
+"$PY" -m PyInstaller --clean --noconfirm --workpath build/work --distpath dist \
     build/backgroundassistant.spec
 
 echo "==> Signing (identity: $IDENTITY)"
-codesign --force --deep --options runtime --timestamp \
+# Nested code first, then the bundle: --deep is documented as unreliable for
+# anything with frameworks in it, and QtWebEngine brings several.
+find "$APP/Contents" \( -name "*.dylib" -o -name "*.so" \) -print0 |
+  xargs -0 -n1 codesign --force --timestamp=none --options runtime \
+      --entitlements build/entitlements.plist --sign "$IDENTITY" 2>/dev/null || true
+for helper in "$APP/Contents/Frameworks/QtWebEngineCore.framework/Helpers/QtWebEngineProcess.app"; do
+  [[ -d "$helper" ]] && codesign --force --options runtime --timestamp=none \
+      --entitlements build/entitlements.plist --sign "$IDENTITY" "$helper"
+done
+codesign --force --deep --options runtime --timestamp=none \
     --entitlements build/entitlements.plist \
     --sign "$IDENTITY" "$APP"
 codesign --verify --deep --strict --verbose=2 "$APP"
+echo "entitlements as signed:"
+codesign -d --entitlements - "$APP" 2>&1 | tail -n +2 || true
 
 echo "==> Smoke test of the built app"
 "$APP/Contents/MacOS/BackgroundAssistant" --check
 "$APP/Contents/MacOS/BackgroundAssistant" --smoke
 
 echo "==> DMG"
+rm -f "$DMG"
+made_dmg=0
 if command -v create-dmg >/dev/null 2>&1; then
-  rm -f "$DMG"
-  create-dmg \
+  if create-dmg \
       --volname "BackgroundAssistant" \
       --window-size 560 380 \
       --icon-size 96 \
       --icon "BackgroundAssistant.app" 140 180 \
       --app-drop-link 400 180 \
       --add-file "Read Me First.txt" build/READ_ME_FIRST.txt 280 320 \
-      "$DMG" "$APP"
-else
-  echo "create-dmg is not installed (brew install create-dmg); packaging a zip instead"
-  (cd dist && zip -qry BackgroundAssistant.zip BackgroundAssistant.app)
+      "$DMG" "$APP"; then
+    made_dmg=1
+  else
+    echo "create-dmg failed; falling back to hdiutil"
+  fi
 fi
+if [[ $made_dmg -eq 0 ]]; then
+  # hdiutil is always present, needs no Homebrew, and still gives the
+  # drag-to-Applications layout that matters.
+  rm -rf "$STAGE"
+  mkdir -p "$STAGE"
+  cp -R "$APP" "$STAGE/"
+  ln -s /Applications "$STAGE/Applications"
+  cp build/READ_ME_FIRST.txt "$STAGE/Read Me First.txt"
+  hdiutil create -volname "BackgroundAssistant" -srcfolder "$STAGE" \
+      -ov -format UDZO -quiet "$DMG"
+  rm -rf "$STAGE"
+fi
+codesign --force --sign "$IDENTITY" "$DMG" || true
 
 if [[ $NOTARIZE -eq 1 ]]; then
   if [[ "$IDENTITY" == "-" ]]; then
@@ -72,6 +117,7 @@ if [[ $NOTARIZE -eq 1 ]]; then
 fi
 
 echo
-echo "Built: $APP"
-[[ -f "$DMG" ]] && echo "       $DMG"
-du -sh "$APP" | awk '{print "Size:  " $1}'
+echo "Built: $ROOT/$APP"
+echo "       $ROOT/$DMG"
+du -sh "$APP" | awk '{print "App size:  " $1}'
+du -sh "$DMG" | awk '{print "DMG size:  " $1}'
