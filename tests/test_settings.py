@@ -246,3 +246,119 @@ def test_no_test_can_reach_the_system_keychain():
     """
     assert SecretStore().available is False
     assert SecretStore().get("openai") == ""
+
+
+# -- one keychain item, one prompt ----------------------------------------
+
+class CountingKeyring(MemoryKeyring):
+    """Records every item touched, because each distinct item is a prompt."""
+
+    def __init__(self, fail=False):
+        super().__init__(fail=fail)
+        self.reads: list = []
+        self.writes: list = []
+        self.deletes: list = []
+
+    def get_password(self, service, account):
+        self.reads.append(account)
+        return super().get_password(service, account)
+
+    def set_password(self, service, account, secret):
+        self.writes.append(account)
+        super().set_password(service, account, secret)
+
+    def delete_password(self, service, account):
+        self.deletes.append(account)
+        super().delete_password(service, account)
+
+    @property
+    def items_touched(self):
+        return set(self.reads) | set(self.writes)
+
+
+def test_every_secret_lives_in_one_item():
+    """macOS grants keychain access per *item*, not per app, so "Always Allow"
+    only covers the prompt in front of you. Three items meant three prompts on
+    first run and a button that did not do what it said."""
+    keyring = CountingKeyring()
+    secrets = SecretStore(backend=keyring)
+    secrets.set("openai", "sk-a")
+    secrets.set("anthropic", "sk-ant-b")
+    secrets.set("conversation-db-key", "abc123")
+
+    # Only ever one item written, whatever is being stored.
+    assert set(keyring.writes) == {"secrets"}
+    assert secrets.get("openai") == "sk-a"
+    assert secrets.get("conversation-db-key") == "abc123"
+
+    # The one-off scan for the old layout reads accounts that do not exist,
+    # which macOS answers without a prompt — and it never happens again once
+    # the vault is there.
+    keyring.reads.clear()
+    fresh = SecretStore(backend=keyring)
+    fresh.get("openai")
+    assert keyring.reads == ["secrets"]
+
+
+def test_reading_every_provider_touches_the_keychain_once():
+    """Preferences asks for all five provider keys on every refresh."""
+    keyring = CountingKeyring()
+    secrets = SecretStore(backend=keyring)
+    secrets.set("openai", "sk-a")
+    keyring.reads.clear()
+    for provider in ("openai", "anthropic", "local", "ollama", "custom"):
+        secrets.get(provider)
+    assert keyring.reads == []          # served from the one read at load
+
+
+def test_a_restart_reads_the_item_once():
+    keyring = CountingKeyring()
+    SecretStore(backend=keyring).set("openai", "sk-a")
+    keyring.reads.clear()
+    fresh = SecretStore(backend=keyring)
+    assert fresh.get("openai") == "sk-a"
+    assert fresh.get("anthropic") == ""
+    assert keyring.reads.count("secrets") == 1
+
+
+def test_secrets_stored_the_old_way_are_adopted_and_tidied_away():
+    """Anyone upgrading already has one item per secret."""
+    keyring = CountingKeyring()
+    keyring.data[(SecretStore().service, "openai")] = "sk-old"
+    keyring.data[(SecretStore().service, "conversation-db-key")] = "old-db-key"
+
+    secrets = SecretStore(backend=keyring)
+    assert secrets.get("openai") == "sk-old"
+    assert secrets.get("conversation-db-key") == "old-db-key"
+    # Folded into the vault…
+    assert json.loads(keyring.data[(secrets.service, "secrets")])["openai"] == "sk-old"
+    # …and the old items removed, so nothing is left holding a copy of a key.
+    assert set(keyring.deletes) == {"openai", "conversation-db-key"}
+
+
+def test_nothing_to_adopt_leaves_the_keychain_alone():
+    keyring = CountingKeyring()
+    secrets = SecretStore(backend=keyring)
+    assert secrets.get("openai") == ""
+    assert keyring.writes == []
+
+
+def test_unreadable_secrets_are_kept_rather_than_overwritten():
+    keyring = CountingKeyring()
+    service = SecretStore().service
+    keyring.data[(service, "secrets")] = "{ not json"
+    secrets = SecretStore(backend=keyring)
+    assert secrets.get("openai") == ""
+    preserved = [account for (_s, account) in keyring.data
+                 if account.startswith("secrets.unreadable-")]
+    assert preserved, "the unreadable value was destroyed"
+
+
+def test_a_refused_write_still_works_for_this_session():
+    class Refusing(CountingKeyring):
+        def set_password(self, service, account, secret):
+            self.writes.append(account)   # accepted, then quietly not kept
+
+    secrets = SecretStore(backend=Refusing())
+    assert secrets.set("openai", "sk-new") is False
+    assert secrets.get("openai") == "sk-new"

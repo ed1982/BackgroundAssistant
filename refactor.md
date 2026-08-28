@@ -515,13 +515,16 @@ Resolved by `platformdirs`. Directories created `0700`, files `0600`. Fixes F11.
 
 `keyring` (one small, well-maintained dependency) talks to the macOS Keychain and the Windows
 Credential Manager natively — no plaintext key on disk on either platform, and macOS will
-prompt for access the first time. Service `com.edmartin.backgroundassistant`, one account per
-provider so several keys can coexist:
+prompt for access the first time.
 
-```python
-keyring.set_password("com.edmartin.backgroundassistant", "openai",    key)
-keyring.set_password("com.edmartin.backgroundassistant", "anthropic", key)
-```
+**Everything lives in one keychain item**, `com.edmartin.backgroundassistant` /
+`secrets`, holding a JSON object of name → secret. The obvious design — an item per
+provider, plus one for the database key — is the wrong one, because macOS grants access
+per *item*, not per application: first run asked three separate times and "Always Allow"
+only ever covered the prompt in front of you. One item is one grant. Several keys still
+coexist; they are keys in the object rather than items in the keychain, and Preferences
+reading all five providers costs one read rather than five. Secrets written under the old
+layout are folded in and the old items removed the first time the app starts.
 
 - Keys are never written to `settings.json`, never logged, never sent to the chat window
   (the UI receives `"sk-…4f2a"`, a display stub, and posts a new key only on save).

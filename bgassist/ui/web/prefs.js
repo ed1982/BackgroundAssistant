@@ -152,7 +152,9 @@
       $("api-key").placeholder = stub ? "Saved: " + stub : "Not set";
       $("api-key").value = "";
       $("key-hint").textContent = meta.keychain_available
-        ? "Stored in the system keychain. Never written to the settings file."
+        ? "Stored in the system keychain, never in a file. macOS asks for "
+          + "permission the first time — choose Always Allow, and it will not "
+          + "ask again."
         : "No system keychain was found, so keys are kept for this session only.";
 
       options($("whisper-model"), meta.whisper_models || [],

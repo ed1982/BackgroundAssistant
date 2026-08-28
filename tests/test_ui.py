@@ -354,3 +354,10 @@ def test_listing_models_reports_failure_rather_than_an_empty_list(application):
     assert result["ok"] is False
     assert result["error"]
     assert result["chat"] == []
+
+
+def test_the_key_field_explains_the_keychain_prompt():
+    """macOS asks for permission the first time and people do not know that
+    Always Allow is the right answer."""
+    script = _read("prefs.js")
+    assert "Always Allow" in script
