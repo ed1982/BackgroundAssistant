@@ -44,7 +44,10 @@ rm -f assets/icon.icns
 iconutil -c icns assets/icon.iconset -o assets/icon.icns
 
 echo "==> Tests"
-"$PY" -m pytest -q
+# Not the integration test: it downloads a whisper model on a clean machine,
+# and a packaging run should not depend on the network. Run it yourself with
+#   .venv/bin/python -m pytest -m integration
+"$PY" -m pytest -q -m "not integration"
 
 echo "==> Headless check"
 "$PY" main.py --check

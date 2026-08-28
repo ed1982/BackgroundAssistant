@@ -72,6 +72,10 @@ def test_mock_tts_records():
 
 
 def test_make_tts_selection(monkeypatch):
+    """The platform is passed in rather than patched onto the real sys module:
+    that patch is global, and the standard library reads sys.platform too —
+    which is how this test used to send shutil.which() down the Windows path
+    on a Mac."""
     created: dict = {}
 
     class FakePyttsx3:
@@ -79,17 +83,32 @@ def test_make_tts_selection(monkeypatch):
             created["made"] = True
 
     monkeypatch.setattr("bgassist.tts.Pyttsx3Tts", FakePyttsx3)
-    monkeypatch.setattr("bgassist.tts.sys.platform", "win32")
-    make_tts(SimpleNamespace(engine="auto", rate=1, voice=None))
+    make_tts(SimpleNamespace(engine="auto", rate=1, voice=None), platform="win32")
     assert created.get("made")
 
-    monkeypatch.setattr("bgassist.tts.sys.platform", "darwin")
-    assert isinstance(make_tts(SimpleNamespace(engine="auto", rate=1, voice=None)),
-                      SayTts)
+    assert isinstance(
+        make_tts(SimpleNamespace(engine="auto", rate=1, voice=None),
+                 platform="darwin"), SayTts)
     assert isinstance(make_tts(SimpleNamespace(engine="mock", rate=1, voice=None)),
                       MockTts)
     with pytest.raises(ValueError):
         make_tts(SimpleNamespace(engine="wat", rate=1, voice=None))
+
+
+def test_a_broken_optional_engine_never_leaves_the_app_mute(monkeypatch):
+    """Piper is optional. Whatever it does on the way out — a missing voice, a
+    missing binary, an exception from the depths of shutil — the app still
+    gets something that can speak."""
+    import bgassist.tts.piper as piper_module
+
+    class Exploding:
+        def __init__(self, *args, **kwargs):
+            raise RuntimeError("something unexpected in an optional dependency")
+
+    monkeypatch.setattr(piper_module, "PiperTts", Exploding)
+    engine = make_tts(SimpleNamespace(engine="auto", rate=180, voice=None),
+                      platform="darwin")
+    assert isinstance(engine, SayTts)
 
 
 def test_pyttsx3_threaded_speak(monkeypatch):
