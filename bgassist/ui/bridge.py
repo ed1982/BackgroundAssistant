@@ -177,15 +177,21 @@ class BridgeCore:
             changes = json.loads(changes)
         return self.settings_store.update(changes)
 
-    def set_api_key(self, provider: str, key: str) -> bool:
-        """Write-only: the key goes straight to the keychain (§6.2)."""
+    def set_api_key(self, provider: str, key: str) -> Dict[str, Any]:
+        """Write-only: the key goes straight to the keychain (§6.2).
+
+        Reports whether it will still be there next launch. macOS refuses to
+        overwrite an item created under a different code signature, which an
+        ad-hoc signed build produces on every rebuild — a key that did not
+        stick must say so rather than disappear overnight.
+        """
         if not key:
-            return False
-        self.app.set_api_key(provider, key)
+            return {"ok": False, "durable": False, "error": "No key was entered."}
+        durable = self.app.set_api_key(provider, key)
         self.app.llm = self.app.build_llm()
         self.app.orchestrator.llm = self.app.llm
         self.app.orchestrator.responder.llm = self.app.llm
-        return True
+        return {"ok": True, "durable": durable}
 
     def clear_api_key(self, provider: str) -> bool:
         from bgassist.llm import PRESETS
@@ -449,9 +455,9 @@ def make_web_bridge(application):
         def updateSettings(self, changes_json: str) -> str:
             return json.dumps(core.update_settings(json.loads(changes_json)))
 
-        @Slot(str, str, result=bool)
-        def setApiKey(self, provider: str, key: str) -> bool:
-            return core.set_api_key(provider, key)
+        @Slot(str, str, result=str)
+        def setApiKey(self, provider: str, key: str) -> str:
+            return json.dumps(core.set_api_key(provider, key))
 
         @Slot(str, result=bool)
         def clearApiKey(self, provider: str) -> bool:

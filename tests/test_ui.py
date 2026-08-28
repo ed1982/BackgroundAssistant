@@ -9,6 +9,7 @@ import pytest
 from bgassist.app import Application
 from bgassist.llm.mock import MockBackend
 from bgassist.settings.schema import Settings
+from bgassist.settings.secrets import MemorySecretStore
 from bgassist.settings.store import SettingsStore
 from bgassist.storage import ConversationStore, NullCipher
 from bgassist.stt.mock import MockTranscriber
@@ -23,6 +24,7 @@ def application(tmp_path):
     app = Application(
         settings_store=SettingsStore(path=tmp_path / "settings.json"),
         conversations=ConversationStore(tmp_path / "c.db", NullCipher()),
+        secrets=MemorySecretStore(),
         llm=MockBackend(), tts=MockTts(), transcriber=MockTranscriber(),
         start_engine=False)
     yield app
@@ -62,7 +64,34 @@ def test_the_bridge_never_hands_out_a_key(bridge, application):
 
 
 def test_setting_a_key_rebuilds_the_backend(bridge, application):
-    assert bridge.set_api_key("openai", "sk-new-key") is True
+    assert bridge.set_api_key("openai", "sk-new-key")["ok"] is True
+    assert application.secrets.get("openai") == "sk-new-key"
+
+
+def test_a_key_the_keychain_will_not_keep_is_reported_rather_than_lost(bridge,
+                                                                      application):
+    """macOS refuses to overwrite an item created under a different code
+    signature — which an ad-hoc signed build produces on every rebuild."""
+    class Refusing:
+        def get_keyring(self):
+            return self
+
+        def get_password(self, service, account):
+            return "the-old-value"
+
+        def set_password(self, service, account, secret):
+            pass  # accepts the call, keeps the old value
+
+        def delete_password(self, service, account):
+            pass
+
+    from bgassist.settings.secrets import SecretStore
+
+    application.secrets = SecretStore(backend=Refusing())
+    result = bridge.set_api_key("openai", "sk-new-key")
+    assert result["ok"] is True
+    assert result["durable"] is False
+    # Still usable for this session, so the user is not stuck.
     assert application.secrets.get("openai") == "sk-new-key"
 
 

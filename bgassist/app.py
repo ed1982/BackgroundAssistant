@@ -100,11 +100,12 @@ class Application:
         account = PRESETS.get(provider, {}).get("keyring_account", provider)
         return self.secrets.get(account)
 
-    def set_api_key(self, provider: str, key: str) -> None:
+    def set_api_key(self, provider: str, key: str) -> bool:
+        """Store the key. False when it will not survive a restart."""
         from bgassist.llm import PRESETS
 
         account = PRESETS.get(provider, {}).get("keyring_account", provider)
-        self.secrets.set(account, key)
+        return bool(self.secrets.set(account, key))
 
     # -- builders ---------------------------------------------------------
     def _build_conversations(self):

@@ -233,3 +233,16 @@ def test_env_expansion_is_gone(tmp_path, store):
     migrate(store, SecretStore(backend=MemoryKeyring()), config_path=path,
             environ={"SOME_VAR": "expanded"})
     assert store.settings.ai.model == "${SOME_VAR}"  # stored verbatim, never expanded
+
+
+def test_no_test_can_reach_the_system_keychain():
+    """The guard in conftest.py, asserted so it cannot be quietly removed.
+
+    Without it, any test building an Application without an explicit secret
+    store reads, writes and deletes entries in the developer's own Keychain —
+    under the same account the shipped app keeps their API key in. It hid on
+    Linux, where the keyring package is usually absent, and surfaced on macOS
+    by reading back a real key.
+    """
+    assert SecretStore().available is False
+    assert SecretStore().get("openai") == ""

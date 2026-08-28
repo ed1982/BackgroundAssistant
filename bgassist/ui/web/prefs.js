@@ -148,9 +148,18 @@
       var key = $("api-key").value.trim();
       if (!key) { toast("Enter a key first"); return; }
       var provider = $("provider").value;
-      backend.setApiKey(provider, key, function (ok) {
+      backend.setApiKey(provider, key, function (json) {
+        var data = JSON.parse(json);
         $("api-key").value = "";
-        toast(ok ? "Key saved to the keychain" : "Could not save the key");
+        if (!data.ok) {
+          toast(data.error || "Could not save the key");
+        } else if (data.durable) {
+          toast("Key saved to the keychain");
+        } else {
+          // Better to say so now than to lose it silently overnight.
+          toast("The keychain would not keep this key — it will work until " +
+                "you quit. Rebuilding an unsigned app does this.");
+        }
         refresh();
       });
     });

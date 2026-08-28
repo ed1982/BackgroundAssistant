@@ -66,37 +66,60 @@ class SecretStore:
 
     # -- api -------------------------------------------------------------
     def get(self, account: str) -> str:
+        # The in-memory layer wins: it only ever holds a value the keychain
+        # refused to keep, and for this session that value is the truth.
+        if account in self._memory:
+            return self._memory[account]
         backend = self._keyring()
         if backend is None:
-            return self._memory.get(account, "")
+            return ""
         try:
             return backend.get_password(self.service, account) or ""
         except Exception as exc:  # noqa: BLE001 - locked keychain, denied prompt
             log.error("could not read %r from the keychain: %s", account, exc)
-            return self._memory.get(account, "")
+            return ""
 
-    def set(self, account: str, secret: str) -> None:
+    def set(self, account: str, secret: str) -> bool:
+        """Store *secret*. True when it will survive a restart.
+
+        macOS can refuse a write without raising — an item created under one
+        code signature is not writable by another, which is exactly what an
+        ad-hoc signed build does on every rebuild. So the write is read back,
+        and a key that did not stick is kept for this session and reported,
+        rather than being silently lost the next time the app starts.
+        """
         if secret is None:
             secret = ""
         backend = self._keyring()
         if backend is None:
             self._memory[account] = secret
-            return
+            return False
         try:
             backend.set_password(self.service, account, secret)
+            stored = backend.get_password(self.service, account) or ""
         except Exception as exc:  # noqa: BLE001
             log.error("could not write %r to the keychain: %s", account, exc)
             self._memory[account] = secret
+            return False
+        if stored != secret:
+            log.error("the keychain did not keep %r; holding it for this session "
+                      "only", account)
+            self._memory[account] = secret
+            return False
+        self._memory.pop(account, None)
+        return True
 
-    def delete(self, account: str) -> None:
+    def delete(self, account: str) -> bool:
         self._memory.pop(account, None)
         backend = self._keyring()
         if backend is None:
-            return
+            return True
         try:
             backend.delete_password(self.service, account)
-        except Exception:  # noqa: BLE001 - absent is fine
-            pass
+        except Exception as exc:  # noqa: BLE001 - absent is fine, refused is not
+            log.info("could not delete %r from the keychain: %s", account, exc)
+            return not self.get(account)
+        return True
 
     def has(self, account: str) -> bool:
         return bool(self.get(account))
