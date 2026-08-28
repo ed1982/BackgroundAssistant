@@ -75,3 +75,15 @@ def test_the_readme_is_honest_about_what_is_stored():
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "Only the exchanges you actually trigger are stored" in readme
     assert "delete" in readme.lower()
+
+
+def test_the_readme_says_it_is_a_client_not_another_assistant():
+    """It looks like yet another chatbot until you read far enough to find out
+    it has no model of its own. That belongs at the top, not in a table
+    halfway down: what is new is the way in, not the thing at the other end."""
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    opening = readme[:2000]
+    assert "brings no AI of its own" in opening
+    for provider in ("OpenAI", "Claude", "Ollama", "LM Studio"):
+        assert provider in opening, provider
+    assert "your own API key" in opening

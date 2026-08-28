@@ -2,8 +2,9 @@
 
 ### It already heard the question.
 
-An assistant that sits in your menu bar, hears the room, and answers when you
-say the word — without making you repeat what you just said.
+A better way to reach the AI you already use. It sits in your menu bar, hears
+the room, and answers when you say the word — without making you repeat what
+you just said.
 
 You are arguing about when the Battle of Hastings was. Neither of you is sure.
 Instead of unlocking a phone, opening an app, and typing out the question you
@@ -25,6 +26,14 @@ makes you ask the question. This lets you **stop** asking it.
    speaking, because you have already finished asking.
 3. **Follow up without explaining again.** "Computer, what about the year
    after?" It still has the thread.
+
+**It brings no AI of its own.** You point it at yours: **OpenAI**, **Claude**,
+or a model running on your own machine (**LM Studio**, **Ollama**,
+**llama.cpp**) — with your own API key, in a dropdown you can change your mind
+in whenever you like. Nothing to sign up to, no subscription, and no service
+in the middle: the question goes from this Mac to the provider you picked, and
+the answer comes back. What is new here is the *way in* — always listening,
+never in the way — not the model at the other end.
 
 **It is not recording you.** The last couple of minutes live in memory and
 nowhere else. Only the exchanges you actually trigger are stored — in a
@@ -70,7 +79,7 @@ macOS 13+, Apple silicon. Intel Macs can run it from source.
 | | |
 |---|---|
 | **Listening** | Whisper, locally. Apple's recogniser is available as an option. |
-| **Answering** | OpenAI, Claude, a local server, or any OpenAI-compatible URL. Answers stream and are spoken sentence by sentence, so speech starts in about a second. |
+| **Answering** | Your own OpenAI or Claude key, a local server, or any OpenAI-compatible URL — swap provider or model in Preferences. Answers stream and are spoken sentence by sentence, so speech starts in about a second. |
 | **Interrupting** | Say the trigger word while it is talking and it stops. What you heard is what it remembers saying. |
 | **Remembering** | Multi-turn conversations, searchable, encrypted on disk. |
 | **Staying quiet** | No Dock icon, no window, no notifications unless you ask. |
