@@ -18,6 +18,27 @@ IDENTITY="${CODESIGN_IDENTITY:--}"          # "-" is ad-hoc
 NOTARIZE=0
 [[ "${1:-}" == "--notarize" ]] && NOTARIZE=1
 
+# Remove a directory even while Finder is watching it.
+#
+# The build finishes by opening Finder on dist/, so on the next run Finder is
+# sitting in that folder writing .DS_Store back into it. `rm -rf` unlinks
+# everything, Finder recreates one file, and the final rmdir fails with
+# "Directory not empty". Renaming has no such race: it succeeds atomically
+# whatever the folder gains a moment later, and what we then delete is a name
+# nothing is watching.
+clean_dir() {
+  local target="$1"
+  [[ -e "$target" ]] || return 0
+  local doomed
+  doomed="$(mktemp -d "${TMPDIR:-/tmp}/bgassist-clean-XXXXXX")"
+  if mv "$target" "$doomed/gone" 2>/dev/null; then
+    rm -rf "$doomed" 2>/dev/null || true
+  else
+    rm -rf "$target" || true
+    rmdir "$doomed" 2>/dev/null || true
+  fi
+}
+
 # Always build with the project's own interpreter, not whatever `python3`
 # happens to mean in this shell.
 if [[ -x ".venv/bin/python" ]]; then
@@ -53,7 +74,12 @@ echo "==> Headless check"
 "$PY" main.py --check
 
 echo "==> PyInstaller"
-rm -rf build/work dist
+# A mounted disk image keeps a handle on its own backing file, and hdiutil
+# refuses to overwrite a volume that is currently attached — so let go of the
+# last build's DMG before deleting and rebuilding it.
+hdiutil detach "/Volumes/BackgroundAssistant" -quiet 2>/dev/null || true
+clean_dir build/work
+clean_dir dist
 "$PY" -m PyInstaller --clean --noconfirm --workpath build/work --distpath dist \
     build/backgroundassistant.spec
 
@@ -98,14 +124,15 @@ fi
 if [[ $made_dmg -eq 0 ]]; then
   # hdiutil is always present, needs no Homebrew, and still gives the
   # drag-to-Applications layout that matters.
-  rm -rf "$STAGE"
+  hdiutil detach "/Volumes/BackgroundAssistant" -quiet 2>/dev/null || true
+  clean_dir "$STAGE"
   mkdir -p "$STAGE"
   cp -R "$APP" "$STAGE/"
   ln -s /Applications "$STAGE/Applications"
   cp build/READ_ME_FIRST.txt "$STAGE/Read Me First.txt"
   hdiutil create -volname "BackgroundAssistant" -srcfolder "$STAGE" \
       -ov -format UDZO -quiet "$DMG"
-  rm -rf "$STAGE"
+  clean_dir "$STAGE"
 fi
 codesign --force --sign "$IDENTITY" "$DMG" || true
 

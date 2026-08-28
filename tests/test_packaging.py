@@ -171,3 +171,21 @@ def test_the_spec_still_parses():
     import ast
 
     ast.parse(read("backgroundassistant.spec"))
+
+
+def test_the_clean_survives_finder_watching_the_folder():
+    """The build ends by opening Finder on dist/, so on the next run Finder is
+    writing .DS_Store back into the folder rm -rf is emptying: everything gets
+    unlinked, one file reappears, and the final rmdir fails with 'Directory
+    not empty'. Renaming does not race."""
+    script = read("build_macos.sh")
+    assert "clean_dir()" in script
+    assert "rm -rf build/work dist" not in script
+    assert "mv \"$target\"" in script
+
+
+def test_the_build_lets_go_of_a_mounted_disk_image():
+    """hdiutil will not overwrite a volume that is currently attached, and the
+    DMG is usually mounted from installing the previous build."""
+    script = read("build_macos.sh")
+    assert script.count("hdiutil detach") >= 2
