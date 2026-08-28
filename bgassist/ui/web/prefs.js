@@ -6,11 +6,21 @@
   var backend = null;
   var meta = {};
   var suppress = false;
+  // What the provider last told us it has. Empty until asked.
+  var models = { chat: [], other: [] };
+  var OTHER = "\u0000other";   // a value no model id can collide with
 
   var $ = function (id) { return document.getElementById(id); };
   var all = function (selector) {
     return Array.prototype.slice.call(document.querySelectorAll(selector));
   };
+
+  function saveModel(model) {
+    backend.updateSettings(JSON.stringify({"ai.model": model}), function () {
+      refresh();
+      toast("Model set to " + model);
+    });
+  }
 
   function toast(message) {
     var node = $("toast");
@@ -81,6 +91,45 @@
     });
   }
 
+  function group(select, label, ids, current) {
+    if (!ids.length) return;
+    var optgroup = document.createElement("optgroup");
+    optgroup.label = label;
+    ids.forEach(function (id) {
+      var option = document.createElement("option");
+      option.value = id;
+      option.textContent = id;
+      if (id === current) option.selected = true;
+      optgroup.appendChild(option);
+    });
+    select.appendChild(optgroup);
+  }
+
+  function fillModels(current) {
+    var select = $("model");
+    select.innerHTML = "";
+    var known = models.chat.concat(models.other);
+    // Whatever is configured is always in the list, even when the provider
+    // has not been asked yet or refused to answer.
+    if (current && known.indexOf(current) === -1) {
+      group(select, "In use", [current], current);
+    }
+    group(select, "Chat models", models.chat, current);
+    group(select, "Other models", models.other, current);
+
+    var other = document.createElement("option");
+    other.value = OTHER;
+    other.textContent = "Other…";
+    select.appendChild(other);
+
+    var custom = $("model-custom");
+    custom.hidden = true;
+    custom.value = "";
+    $("model-hint").textContent = known.length
+      ? known.length + " models offered by this provider"
+      : "Press Refresh to ask the provider what it offers.";
+  }
+
   function refresh() {
     backend.getSettings(function (json) {
       var settings = JSON.parse(json);
@@ -98,6 +147,7 @@
               settings.ai.provider,
               providers.reduce(function (acc, p) { acc[p.id] = p.label; return acc; }, {}));
 
+      fillModels(settings.ai.model);
       var stub = (meta.keys || {})[settings.ai.provider] || "";
       $("api-key").placeholder = stub ? "Saved: " + stub : "Not set";
       $("api-key").value = "";
@@ -253,17 +303,41 @@
       backend.detectServers();
     });
 
+    backend.modelsListed.connect(function (json) {
+      var data = JSON.parse(json);
+      if (!data.ok) {
+        $("model-hint").textContent = "Could not ask the provider: " + data.error;
+        return;
+      }
+      models = { chat: data.chat || [], other: data.other || [] };
+      fillModels($("model").value === OTHER ? $("model-custom").value
+                                            : $("model").value);
+      toast(models.chat.length + models.other.length + " models found");
+    });
+
     $("refresh-models").addEventListener("click", function () {
-      backend.listModels(function (json) {
-        var list = $("model-list");
-        list.innerHTML = "";
-        JSON.parse(json).forEach(function (id) {
-          var option = document.createElement("option");
-          option.value = id;
-          list.appendChild(option);
-        });
-        toast("Model list refreshed");
-      });
+      $("model-hint").textContent = "Asking the provider…";
+      backend.listModels();
+    });
+
+    $("model").addEventListener("change", function () {
+      var custom = $("model-custom");
+      if (this.value === OTHER) {
+        custom.hidden = false;
+        custom.focus();
+        return;   // nothing to save until they type one
+      }
+      custom.hidden = true;
+      saveModel(this.value);
+    });
+
+    $("model-custom").addEventListener("change", function () {
+      if (this.value.trim()) saveModel(this.value.trim());
+    });
+
+    // Changing provider changes what the model list means.
+    $("provider").addEventListener("change", function () {
+      models = { chat: [], other: [] };
     });
 
     $("restore-prompt").addEventListener("click", function () {

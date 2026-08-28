@@ -227,12 +227,27 @@ class BridgeCore:
                  "models": s.models, "note": s.note}
                 for s in detect_local_servers()]
 
-    def list_models(self) -> List[str]:
+    #: Providers whose model ids are whatever the person named their own
+    #: files, so nearly everything listed is a chat model.
+    LOCAL_PROVIDERS = ("local", "ollama", "custom")
+
+    def list_models(self) -> Dict[str, Any]:
+        """The provider's models, grouped for the picker.
+
+        Grouped rather than filtered: a provider can ship a model faster than
+        anyone updates a list of prefixes, so the unrecognised ones are still
+        offered — just below the ones that are obviously conversational.
+        """
+        from bgassist.llm import rank_models
+
+        provider = self.app.settings.ai.provider
         try:
-            return self.app.build_llm().list_models()
-        except Exception as exc:  # noqa: BLE001
+            ids = self.app.build_llm().list_models()
+        except Exception as exc:  # noqa: BLE001 - no key yet, or offline
             log.info("could not list models: %s", exc)
-            return []
+            return {"ok": False, "chat": [], "other": [], "error": str(exc)}
+        chat, other = rank_models(ids, generous=provider in self.LOCAL_PROVIDERS)
+        return {"ok": True, "chat": chat, "other": other, "error": ""}
 
     def restore_system_prompt(self) -> str:
         from bgassist.llm.prompts import DEFAULT_SYSTEM_PROMPT
@@ -382,6 +397,7 @@ def make_web_bridge(application):
         # the GUI thread and answer through these rather than by returning.
         connectionTested = Signal(str)
         serversDetected = Signal(str)
+        modelsListed = Signal(str)
 
         def __init__(self) -> None:
             super().__init__()
@@ -477,9 +493,11 @@ def make_web_bridge(application):
             _in_background("detect-servers", lambda: self.serversDetected.emit(
                 json.dumps(core.detect_servers())))
 
-        @Slot(result=str)
-        def listModels(self) -> str:
-            return json.dumps(core.list_models())
+        @Slot()
+        def listModels(self) -> None:
+            # A network call: off the GUI thread, answered by signal.
+            _in_background("list-models", lambda: self.modelsListed.emit(
+                json.dumps(core.list_models())))
 
         @Slot(result=str)
         def restoreSystemPrompt(self) -> str:

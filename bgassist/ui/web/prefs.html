@@ -91,10 +91,13 @@
       <div class="field">
         <span class="label">Model</span>
         <div class="row">
-          <input id="model" type="text" data-setting="ai.model" list="model-list">
-          <datalist id="model-list"></datalist>
-          <button id="refresh-models">Refresh</button>
+          <select id="model"></select>
+          <button id="refresh-models" title="Ask the provider what it offers">
+            Refresh</button>
         </div>
+        <input id="model-custom" type="text" hidden
+               placeholder="Type a model name" autocomplete="off">
+        <span class="hint" id="model-hint"></span>
       </div>
 
       <div class="row">

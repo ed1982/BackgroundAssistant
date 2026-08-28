@@ -437,3 +437,41 @@ def test_reasoning_effort_is_asked_for_and_dropped_when_refused(fussy):
     assert backend.ask("", "status") == "All systems nominal."
     assert _FussyHandler.seen[0]["reasoning_effort"] == "low"
     assert "reasoning_effort" not in _FussyHandler.seen[1]
+
+
+# -- the model picker ------------------------------------------------------
+
+def test_models_are_grouped_not_filtered():
+    """/v1/models returns everything the account can reach — embeddings,
+    speech, images. Offering "text-embedding-3-small" as an assistant is
+    worse than no picker; hiding an unrecognised model is worse still, since
+    a provider ships new ones faster than anyone updates a prefix list."""
+    from bgassist.llm import rank_models
+
+    chat, other = rank_models([
+        "gpt-4o-mini", "gpt-5-mini", "o4-mini", "chatgpt-4o-latest",
+        "text-embedding-3-small", "whisper-1", "dall-e-3", "tts-1-hd",
+        "omni-moderation-latest", "brand-new-model-nobody-has-heard-of"])
+    assert chat == ["chatgpt-4o-latest", "gpt-4o-mini", "gpt-5-mini", "o4-mini"]
+    assert "text-embedding-3-small" in other
+    assert "whisper-1" in other
+    # Not hidden, just not first.
+    assert "brand-new-model-nobody-has-heard-of" in other
+
+
+def test_a_local_server_is_given_the_benefit_of_the_doubt():
+    """Local ids are whatever the person named their own files."""
+    from bgassist.llm import rank_models
+
+    chat, other = rank_models(
+        ["lmstudio-community/Meta-Llama-3.1-8B-Instruct", "my-finetune-v2",
+         "nomic-embed-text"], generous=True)
+    assert "my-finetune-v2" in chat
+    assert other == ["nomic-embed-text"]
+
+
+def test_ranking_is_stable_and_deduplicated():
+    from bgassist.llm import rank_models
+
+    chat, _other = rank_models(["gpt-4o", "gpt-4o", "gpt-3.5-turbo", None, ""])
+    assert chat == ["gpt-3.5-turbo", "gpt-4o"]

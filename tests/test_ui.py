@@ -328,3 +328,29 @@ def test_the_voice_tab_says_where_better_voices_come_from():
 
 def test_the_bridge_reports_the_platform_for_platform_specific_advice(bridge):
     assert bridge.get_settings()["_meta"]["platform"]
+
+
+def test_the_model_picker_is_a_dropdown_that_can_still_take_a_typed_name():
+    page, script = _read("prefs.html"), _read("prefs.js")
+    assert '<select id="model">' in page
+    assert 'id="model-custom"' in page          # "Other…" reveals this
+    assert "optgroup" in script
+    assert "Chat models" in script and "Other models" in script
+
+
+def test_the_configured_model_is_always_in_the_list(bridge, application):
+    """Even before the provider has been asked, or when it refuses."""
+    script = _read("prefs.js")
+    assert "In use" in script
+    assert 'known.indexOf(current) === -1' in script
+
+
+def test_listing_models_reports_failure_rather_than_an_empty_list(application):
+    """An empty dropdown and a broken key look identical otherwise."""
+    application._llm_override = None   # use a real backend, not the fake
+    application.settings_store.update({"ai.provider": "custom",
+                                       "ai.base_url": "http://127.0.0.1:1/v1"})
+    result = BridgeCore(application).list_models()
+    assert result["ok"] is False
+    assert result["error"]
+    assert result["chat"] == []

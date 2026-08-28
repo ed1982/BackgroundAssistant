@@ -17,11 +17,53 @@ from bgassist.llm.prompts import DEFAULT_SYSTEM_PROMPT, build_messages, history_
 
 log = logging.getLogger("bgassist.llm")
 
+#: Model ids that are certainly not something to hold a conversation with.
+#: OpenAI's /v1/models returns everything the account can reach — embeddings,
+#: speech, images, moderation — and a picker offering
+#: "text-embedding-3-small" as an assistant is worse than no picker.
+_NOT_CHAT = ("embed", "whisper", "tts", "audio", "dall-e", "dalle", "image",
+             "moderation", "rerank", "clip", "sora", "transcribe", "realtime",
+             "guard", "safety", "bge-", "-e5", "nomic", "codex", "davinci",
+             "babbage", "similarity", "search-")
+
+#: Families worth putting at the top. Absence is not disqualifying — anything
+#: unrecognised is still offered, just lower down — so a new model release
+#: does not disappear from the list until someone updates this tuple.
+_CHAT_FAMILIES = ("gpt-", "chatgpt", "o1", "o3", "o4", "claude", "llama",
+                  "mistral", "mixtral", "qwen", "gemma", "phi", "deepseek",
+                  "command", "granite", "hermes", "yi-", "glm", "kimi",
+                  "nemotron", "olmo", "vicuna", "zephyr", "dolphin", "wizard",
+                  "solar", "aya", "exaone", "minicpm", "internlm", "smol")
+
+
+def rank_models(ids, generous: bool = False):
+    """Split model ids into (conversational, everything else).
+
+    Nothing is hidden — the second list is still offered — because a provider
+    can ship a model faster than anyone updates a list of prefixes. This only
+    decides what appears at the top.
+
+    *generous* is for local servers, where the ids are whatever the person
+    named their own files and almost all of them are chat models.
+    """
+    chat, other = [], []
+    for model in sorted({str(i) for i in ids if i}):
+        lowered = model.lower()
+        if any(token in lowered for token in _NOT_CHAT):
+            other.append(model)
+        elif (generous or any(f in lowered for f in _CHAT_FAMILIES)
+                or "instruct" in lowered or "chat" in lowered):
+            chat.append(model)
+        else:
+            other.append(model)
+    return chat, other
+
 __all__ = [
     "AnthropicBackend", "HttpBackend", "LLMBackend", "LLMCancelled", "LLMError",
     "LocalServer", "KNOWN_PORTS", "MockBackend", "OllamaBackend",
     "OpenAICompatibleBackend", "DEFAULT_SYSTEM_PROMPT", "build_messages",
-    "history_from_messages", "detect_local_servers", "make_llm", "PRESETS",
+    "history_from_messages", "detect_local_servers", "make_llm", "rank_models",
+    "PRESETS",
 ]
 
 #: Provider presets shown in the Preferences dropdown. ``keyring_account`` is
