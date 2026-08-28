@@ -7,15 +7,18 @@ the room, and answers when you say the word — without making you repeat what
 you just said.
 
 You are arguing about when the Battle of Hastings was. Neither of you is sure.
-Instead of unlocking a phone, opening an app, and typing out the question you
-have both just said aloud, you say:
+You say:
 
 > **"Computer?"**
 
 And it answers. It was already listening.
 
-That is the whole idea. *"Hey Siri, when was the Battle of Hastings"* still
-makes you ask the question. This lets you **stop** asking it.
+**The problem is having to ask twice.** Everything else makes you take out
+your phone, or reach over to the laptop and hit tap-to-speak, and then say
+again — properly this time, to a machine — the question you just said out loud
+to a person. The conversation stops and waits while you do it, and half the
+time it is not worth the interruption, so you never find out. This one is
+already listening. There is nothing to repeat, and nobody is waiting.
 
 **Three ways to use it**
 
