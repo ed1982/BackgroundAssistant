@@ -135,7 +135,7 @@ def test_the_icon_generator_runs(tmp_path):
 
 def test_the_project_metadata_declares_the_optional_extras():
     pyproject = (ROOT / "pyproject.toml").read_text()
-    for extra in ("piper", "spotter", "windows", "macos", "dev"):
+    for extra in ("piper", "spotter", "windows", "macos", "dev", "build"):
         assert re.search(rf"^{extra} = ", pyproject, re.M), extra
     for dependency in ("keyring", "cryptography", "platformdirs", "PySide6"):
         assert dependency in pyproject, dependency
@@ -155,3 +155,19 @@ def test_the_smoke_mode_uses_a_throwaway_data_directory():
     source = (ROOT / "bgassist" / "cli.py").read_text()
     body = source.split("def run_smoke", 1)[1].split("\ndef ", 1)[0]
     assert "BGASSIST_HOME" in body
+
+
+def test_the_webrtcvad_hook_is_overridden():
+    """The contributed hook copies metadata for the distribution named
+    'webrtcvad'; we depend on webrtcvad-wheels, so it raises and takes the
+    build down. Ours replaces it (user hooks outrank contributed ones)."""
+    hook = BUILD / "hooks" / "hook-webrtcvad.py"
+    assert hook.exists()
+    assert "webrtcvad-wheels" in hook.read_text()
+    assert 'hookspath=[str(ROOT / "build" / "hooks")]' in read("backgroundassistant.spec")
+
+
+def test_the_spec_still_parses():
+    import ast
+
+    ast.parse(read("backgroundassistant.spec"))

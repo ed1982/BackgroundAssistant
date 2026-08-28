@@ -58,7 +58,8 @@ a = Analysis(
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
-    hookspath=[],
+    # Ours take priority over the contributed ones; see build/hooks/.
+    hookspath=[str(ROOT / "build" / "hooks")],
     runtime_hooks=[],
     # Only obviously-unused third-party trees. Excluding PySide6 submodules
     # by name interferes with its own hook's collection, which is not worth

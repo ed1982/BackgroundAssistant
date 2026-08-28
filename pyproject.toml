@@ -35,6 +35,9 @@ windows = ["pyttsx3>=2.90"]
 # macOS integration: login item (SMAppService) and Apple speech recognition.
 macos = ["pyobjc-framework-ServiceManagement>=10.0", "pyobjc-framework-Speech>=10.0"]
 dev = ["pytest>=8.0", "pytest-timeout>=2.2", "ruff>=0.5"]
+# Packaging. Kept out of `dev` so a plain checkout does not pull 30 MB of
+# build tooling; build/build_macos.sh installs it if it is missing.
+build = ["pyinstaller>=6.10"]
 
 [project.scripts]
 backgroundassistant = "bgassist.cli:main"
