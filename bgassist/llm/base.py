@@ -48,7 +48,7 @@ class LLMHttpError(LLMError):
 #: not in here (``model``, ``messages``) is a real error worth surfacing.
 ADAPTABLE_PARAMETERS = frozenset({
     "temperature", "top_p", "presence_penalty", "frequency_penalty",
-    "max_completion_tokens", "max_tokens",
+    "max_completion_tokens", "max_tokens", "reasoning_effort",
 })
 
 #: Some refusals are better answered by renaming than by dropping: servers

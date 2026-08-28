@@ -334,3 +334,106 @@ def test_the_connection_test_reports_what_the_model_ignored(fussy):
     result = backend.test_connection()
     assert result["ok"] is True
     assert result["ignored"] == ["temperature"]
+
+
+# -- reasoning models that spend the whole budget before answering --------
+
+class _ReasoningHandler(_Handler):
+    """Answers only when given room to think first.
+
+    This is what a gpt-5 or o-series model does: hidden reasoning is billed
+    against max_completion_tokens, so a budget sized for one spoken sentence
+    is gone before a word is written, and the completion comes back empty with
+    finish_reason "length".
+    """
+
+    threshold = 2000
+    seen: list = []
+    stream_mode = False
+
+    def do_POST(self):
+        length = int(self.headers.get("Content-Length", 0))
+        body = json.loads(self.rfile.read(length) or b"{}")
+        type(self).seen.append(body)
+        room = body.get("max_completion_tokens", 0) >= self.threshold
+        if self.stream_mode:
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.end_headers()
+            if room:
+                for chunk in ("The West Bank ", "is a territory."):
+                    self.wfile.write(
+                        f"data: {json.dumps({'choices': [{'delta': {'content': chunk}}]})}\n\n".encode())
+            self.wfile.write(
+                f"data: {json.dumps({'choices': [{'delta': {}, 'finish_reason': 'stop' if room else 'length'}]})}\n\n".encode())
+            self.wfile.write(b"data: [DONE]\n\n")
+            return
+        payload = {"choices": [{
+            "message": {"content": "The West Bank is a territory." if room else ""},
+            "finish_reason": "stop" if room else "length"}]}
+        data = json.dumps(payload).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+
+@pytest.fixture()
+def reasoning():
+    _ReasoningHandler.seen = []
+    _ReasoningHandler.stream_mode = False
+    srv = HTTPServer(("127.0.0.1", 0), _ReasoningHandler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    srv.base = f"http://127.0.0.1:{srv.server_address[1]}/v1"
+    yield srv
+    srv.shutdown()
+
+
+def test_an_empty_answer_from_a_reasoning_model_is_retried_with_room(reasoning):
+    """'I have nothing to report' was the app faithfully reporting an empty
+    completion. The completion was empty because the model had no budget left
+    after thinking."""
+    backend = _backend(reasoning.base, max_tokens=400)
+    assert backend.ask("", "what is the West Bank") == "The West Bank is a territory."
+    assert _ReasoningHandler.seen[0]["max_completion_tokens"] == 400
+    assert _ReasoningHandler.seen[1]["max_completion_tokens"] >= 2000
+
+
+def test_the_larger_budget_is_remembered(reasoning):
+    backend = _backend(reasoning.base, max_tokens=400)
+    backend.ask("", "first")
+    before = len(_ReasoningHandler.seen)
+    backend.ask("", "second")
+    assert len(_ReasoningHandler.seen) == before + 1  # no second attempt needed
+    assert _ReasoningHandler.seen[-1]["max_completion_tokens"] >= 2000
+
+
+def test_streaming_retries_before_a_single_token_is_spoken(reasoning):
+    _ReasoningHandler.stream_mode = True
+    backend = _backend(reasoning.base, max_tokens=400)
+    chunks = list(backend.stream("", "what is the West Bank"))
+    assert "".join(chunks) == "The West Bank is a territory."
+    # Exactly once, so nothing could ever be spoken twice.
+    assert chunks.count("The West Bank ") == 1
+
+
+def test_a_genuinely_empty_answer_is_not_retried_for_ever(reasoning):
+    _ReasoningHandler.threshold = 10 ** 9  # never satisfied
+    try:
+        backend = _backend(reasoning.base, max_tokens=400)
+        assert backend.ask("", "hello") == ""
+        assert len(_ReasoningHandler.seen) == 2  # one growth, then it gives up
+    finally:
+        _ReasoningHandler.threshold = 2000
+
+
+def test_reasoning_effort_is_asked_for_and_dropped_when_refused(fussy):
+    """A voice assistant is waited on out loud, so ask for the cheapest
+    reasoning that answers — and stop asking models that have never heard
+    of it."""
+    _FussyHandler.refuse = "reasoning_effort"
+    backend = _backend(fussy.base)
+    assert backend.ask("", "status") == "All systems nominal."
+    assert _FussyHandler.seen[0]["reasoning_effort"] == "low"
+    assert "reasoning_effort" not in _FussyHandler.seen[1]
